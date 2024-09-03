@@ -1,10 +1,14 @@
 ﻿#include <windows.h>
 #include <vector>
 #include <string>
+#include <time.h>
+#include <process.h>
+#include "resource.h"
 
 #define HOTKEY_ID 1
+#define VERY_SECRET_BUTTON 10000
 #define TRAY_ICON_MESSAGE (WM_USER + 1)
-
+bool isDebugMode = false;
 struct HiddenWindow {
 	HWND hwnd;
 	std::wstring windowTitle;
@@ -21,30 +25,16 @@ static std::wstring wstr[] = {
 			L"TaskManagerWindow", //Диспетчер задач
 			L"TopLevelWindowForOverflowXamlIsland", //Скрытая панель трея
 			L"WinUIDesktopWin32WindowClass", //Всплывающие окно трея у приложений использующих WinUI3
-			L"SystemTray_Main" //Всплывающие окно трея у системных приложений
+			L"SystemTray_Main", //Всплывающие окно трея у системных приложений
+			L"Windows.UI.Core.CoreWindow",//Другие окна UI Windows
+			L"WindowsDashboard"//Панель слева
 };
 
-HBITMAP IconToBitmap(HICON hIcon) {
-	const int width = 16;
-	const int height = 16;
-	HDC hdcScreen = GetDC(NULL);
-	HDC hdcMem = CreateCompatibleDC(hdcScreen);
-	HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
-	HBITMAP hOldBitmap = (HBITMAP)SelectObject(hdcMem, hBitmap);
-	{
-		HBRUSH hBrush = CreateSolidBrush({ 0xf9f9f9 });
-		RECT rect = { 0, 0, width, height };
-		FillRect(hdcMem, &rect, hBrush);
-		DeleteObject(hBrush);
-	}
-	DrawIconEx(hdcMem, 0, 0, hIcon, width, height, 0, NULL, DI_NORMAL);
-	SelectObject(hdcMem, hOldBitmap);
-	DeleteDC(hdcMem);
-	ReleaseDC(NULL, hdcScreen);
-	return hBitmap;
-}
+bool RunAsAdmin();
+void DebugModCheck(WCHAR* lpCmdLine);
+static HBITMAP IconToBitmap(HICON hIcon);
 
-void UpdateTrayMenu() {
+static void UpdateTrayMenu() {
 	if (hMenu) {
 		DestroyMenu(hMenu);
 	}
@@ -60,17 +50,22 @@ void UpdateTrayMenu() {
 	if (!hiddenWindows.empty()) {
 		AppendMenu(hMenu, MF_SEPARATOR, 0, NULL);
 	}
+	if (isDebugMode)
+		AppendMenu(hMenu, MF_STRING | MF_DISABLED, 0, L"Debug mode is enabled");
+	else
+		AppendMenu(hMenu, MF_STRING | MF_DISABLED, 0, L"Ctrl + Alt + H");
 	AppendMenu(hMenu, MF_STRING, 9999, L"Выход");
 }
 
-LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_HOTKEY:
 		if (wParam == HOTKEY_ID) {
 			HWND activeWnd = GetForegroundWindow();
 			if (activeWnd) {
 				wchar_t className[256];
-				GetClassName(activeWnd, className, sizeof(className) / sizeof(wchar_t));
+				ZeroMemory(&className, (sizeof(className) / sizeof(className[0])));
+				GetClassName(activeWnd, className, sizeof(className) / sizeof(className[0]));
 
 				for (auto& t : wstr) {
 					if (t == className)
@@ -78,7 +73,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 				}
 
 				wchar_t windowTitle[256];
-				GetWindowText(activeWnd, windowTitle, sizeof(windowTitle) / sizeof(wchar_t));
+				ZeroMemory(&windowTitle, (sizeof(windowTitle) / sizeof(windowTitle[0])));
+				GetWindowText(activeWnd, windowTitle, (sizeof(windowTitle) / sizeof(windowTitle[0])));
+				if (wcslen(windowTitle) == 0 || isDebugMode) {
+					wcscpy_s(windowTitle, className);
+				}
 
 				HICON hIcon = (HICON)SendMessage(activeWnd, WM_GETICON, ICON_SMALL, 0);
 				if (!hIcon) {
@@ -133,17 +132,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	return 0;
 }
 
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow) {
+int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ WCHAR* lpCmdLine, _In_ int nCmdShow) {
+	if (!RunAsAdmin())
+		MessageBox(NULL, L"Для корректной работы программы перезапустите её с правами Администратора", L"Внимание", MB_ICONWARNING);
+
+	DebugModCheck(lpCmdLine);
+
 	WNDCLASS wc = {};
 	{
 		wc.lpfnWndProc = WndProc;
 		wc.hInstance = hInstance;
-		wc.lpszClassName = L"TrayAppClass";
+		wc.lpszClassName = L"CTRIFATrayApp";
 	}
 	RegisterClass(&wc);
 	HWND hwnd = CreateWindowEx(0, wc.lpszClassName, wc.lpszClassName, NULL, NULL, NULL, NULL, NULL, NULL, NULL, hInstance, NULL);
 
-	RegisterHotKey(hwnd, HOTKEY_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'T');
+	RegisterHotKey(hwnd, HOTKEY_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'H');
 	NOTIFYICONDATA nid = {};
 	{
 		nid.cbSize = sizeof(NOTIFYICONDATA);
@@ -151,7 +155,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		nid.uID = 1;
 		nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 		nid.uCallbackMessage = TRAY_ICON_MESSAGE;
-		nid.hIcon = LoadIcon(NULL, IDI_APPLICATION);
+		nid.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
 		wcscpy_s(nid.szTip, L"Скрытые окна");
 	}
 	Shell_NotifyIcon(NIM_ADD, &nid);
@@ -167,4 +171,49 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	UnregisterClass(wc.lpszClassName, wc.hInstance);
 
 	return 0;
+}
+
+bool RunAsAdmin() {
+	BOOL isAdmin = FALSE;
+	PSID adminGroup = NULL;
+	SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
+	if (AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+		DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+		if (!CheckTokenMembership(NULL, adminGroup, &isAdmin)) {
+			isAdmin = FALSE;
+		}
+		FreeSid(adminGroup);
+	}
+	return isAdmin;
+}
+
+void DebugModCheck(WCHAR* lpCmdLine) {
+	int argsCount;
+	wchar_t** cmdArgvLine;
+	if (cmdArgvLine = CommandLineToArgvW(lpCmdLine, &argsCount))
+		for (int i = 0; i != argsCount; i++)
+			if (!lstrcmpW(cmdArgvLine[i], L"debug")) {
+				isDebugMode = true;
+				break;
+			}
+}
+
+static HBITMAP IconToBitmap(HICON hIcon) {
+	const int width = 16;
+	const int height = 16;
+	HDC hdcScreen = GetDC(NULL);
+	HDC hdcMem = CreateCompatibleDC(hdcScreen);
+	HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
+	HBITMAP hOldBitmap = (HBITMAP)SelectObject(hdcMem, hBitmap);
+	{
+		HBRUSH hBrush = CreateSolidBrush({ 0xf9f9f9 });
+		RECT rect = { 0, 0, width, height };
+		FillRect(hdcMem, &rect, hBrush);
+		DeleteObject(hBrush);
+	}
+	DrawIconEx(hdcMem, 0, 0, hIcon, width, height, 0, NULL, DI_NORMAL);
+	SelectObject(hdcMem, hOldBitmap);
+	DeleteDC(hdcMem);
+	ReleaseDC(NULL, hdcScreen);
+	return hBitmap;
 }
