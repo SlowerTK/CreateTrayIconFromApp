@@ -2,7 +2,6 @@
 #include <vector>
 #include <string>
 #include <time.h>
-#include <process.h>
 #include "resource.h"
 
 #define HOTKEY_ID 1
@@ -27,7 +26,8 @@ static std::wstring wstr[] = {
 			L"WinUIDesktopWin32WindowClass", //Всплывающие окно трея у приложений использующих WinUI3
 			L"SystemTray_Main", //Всплывающие окно трея у системных приложений
 			L"Windows.UI.Core.CoreWindow",//Другие окна UI Windows
-			L"WindowsDashboard"//Панель слева
+			L"WindowsDashboard", //Панель слева
+			L"CTRIFATrayApp" //myself
 };
 
 bool RunAsAdmin();
@@ -133,8 +133,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 }
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ WCHAR* lpCmdLine, _In_ int nCmdShow) {
+	HANDLE hMutex = CreateMutexW(0, TRUE, L"CTIFA");
+	if (!hMutex || GetLastError() == ERROR_ALREADY_EXISTS)
+		return 1;
+
 	if (!RunAsAdmin())
-		MessageBox(NULL, L"Для корректной работы программы перезапустите её с правами Администратора", L"Внимание", MB_ICONWARNING);
+		MessageBox(NULL, L"Для корректной работы программы рекамендуется запускать её с правами Администратора", L"Внимание", MB_ICONWARNING);
 
 	DebugModCheck(lpCmdLine);
 
@@ -169,7 +173,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	Shell_NotifyIcon(NIM_DELETE, &nid);
 	UnregisterHotKey(hwnd, HOTKEY_ID);
 	UnregisterClass(wc.lpszClassName, wc.hInstance);
-
+	ReleaseMutex(hMutex);
 	return 0;
 }
 
