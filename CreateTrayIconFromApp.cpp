@@ -1,5 +1,18 @@
 ﻿#include "functions.hpp"
 
+UINT WM_TASKBAR_CREATED;
+NOTIFYICONDATA nid = {};
+void AddTrayIcon(HWND hwnd){
+	nid.cbSize = sizeof(NOTIFYICONDATA);
+	nid.hWnd = hwnd;
+	nid.uID = 1;
+	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+	nid.uCallbackMessage = TRAY_ICON_MESSAGE;
+	nid.hIcon = LoadIcon(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
+	wcscpy_s(nid.szTip, L"Скрытые окна");
+	Shell_NotifyIconW(NIM_ADD, &nid);
+}
+
 void ScaleToFS(HWND activeWnd) {
 
 	auto it = std::find_if(fullscreenBorderlessWindows.begin(), fullscreenBorderlessWindows.end(),
@@ -45,6 +58,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		pv.hAddButton = CreateWindow(L"BUTTON", L"▶", WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, 300, 100, 40, 30, hwnd, (HMENU)ID_BUTTON_ADD, pv.hInstance, NULL);
 		pv.hRemoveButton = CreateWindow(L"BUTTON", L"◀", WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, 300, 140, 40, 30, hwnd, (HMENU)ID_BUTTON_REMOVE, pv.hInstance, NULL);
 		UpdateApplicationsList();
+		UpdateFavoriteList();
 		break;
 	case WM_SIZE: {
 		int width = LOWORD(lParam);
@@ -73,7 +87,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			LRESULT sel = SendMessage(pv.hApplicationsList, LB_GETCURSEL, 0, 0);
 			if (sel != LB_ERR) {
 				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hApplicationsList, LB_GETITEMDATA, sel, 0);
-				int i = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, 0, (LPARAM)HW->windowTitle.c_str());
+				favoriteWindows.push_back(*HW);
+				int i = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, 0, (LPARAM)HW->className.c_str());
 				SendMessage(pv.hFavoritesList, LB_SETITEMDATA, i, (LPARAM)HW);
 				SendMessage(pv.hApplicationsList, LB_DELETESTRING, sel, 0);
 			}
@@ -81,7 +96,12 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			LRESULT sel = SendMessage(pv.hFavoritesList, LB_GETCURSEL, 0, 0);
 			if (sel != LB_ERR) {
 				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, sel, 0);
-				//ФАЙЛ ГДЕ?!!??!?!?!?!?!?!?!?
+				
+                auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
+                                       [&](const FavoriteWindow& wnd) { return wnd.hwnd == HW->hwnd; });
+                if (it != favoriteWindows.end()) {
+                    favoriteWindows.erase(it);
+                }
 				SendMessage(pv.hFavoritesList, LB_DELETESTRING, sel, 0);
 				UpdateApplicationsList();
 				delete HW;
@@ -90,9 +110,20 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		break;
 	case WM_TIMER:
 		UpdateApplicationsList();
-		CollapseToTrayFromFavorite();
+		//CollapseToTrayFromFavorite();
 		break;
 	case WM_CLOSE:
+		CollapseToTrayFromFavorite();
+		{
+			CheckFolderAndFile();
+			std::string favorite{};
+			for (auto& vec : favoriteWindows) {
+				favorite += serializeToString(vec);
+			}
+			WriteSettingsFile(favorite);
+		}
+		DeleteList(pv.hApplicationsList);
+		DeleteList(pv.hFavoritesList);
 		KillTimer(pv.settWin, TID_UPDATE);
 		pv.settWin = NULL;
 		DestroyWindow(hwnd);
@@ -103,25 +134,17 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	return 0;
 }
 static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	if (uMsg == WM_TASKBAR_CREATED) {
+		AddTrayIcon(hwnd);
+	}
 	switch (uMsg) {
 	case WM_HOTKEY: {
 		HWND activeWnd = GetForegroundWindow();
 		if (!activeWnd)
 			return 0;
-		std::wstring className;
-		{
-			wchar_t classNam[256];
-			ZeroMemory(&classNam, (sizeof(classNam) / sizeof(classNam[0])));
-			GetClassName(activeWnd, classNam, sizeof(classNam) / sizeof(classNam[0]));
-			className = classNam;
-		}
-		for (const auto& t : wstr) {
-			if (t == className)
-				return 0;
-		}
 		switch (wParam) {
 		case HK_CTIFA_ID:
-			CollapseToTray(activeWnd, className);
+			CollapseToTray(activeWnd);
 			break;
 		case HK_FBL_ID:
 			ScaleToFS(activeWnd);
@@ -144,11 +167,10 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				ShowWindow(hiddenWindows[index].hwnd, SW_SHOW);
 				SetForegroundWindow(hiddenWindows[index].hwnd);
 				hiddenWindows.erase(hiddenWindows.begin() + index);
-			} else if (cmd == 9999) {
+			} else if (cmd == TB_EXIT)
 				CloseApp();
-			} else if (cmd == 1) {
+			else if (cmd == TB_SETTINGS)
 				OpenSettings();
-			}
 			break;
 		}
 		case WM_LBUTTONUP:
@@ -161,7 +183,6 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	case WM_DESTROY:
 		CloseApp();
 		break;
-
 	default:
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
@@ -174,9 +195,10 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		return 1;
 	pv.hInstance = hInstance;
 	if (!RunAsAdmin())
-		MessageBox(NULL, L"Для корректной работы программы рекомендуется запускать её с правами Администратора", L"Внимание", MB_ICONWARNING);
+		MBATTENTION(WT_ADMIN);
 
 	DebugModCheck(lpCmdLine);
+	WM_TASKBAR_CREATED = RegisterWindowMessageW(L"TaskbarCreated");
 
 	pv.wc1 = RegisterNewClass(L"CTRIFATrayApp", TrayProc);
 	pv.wc2 = RegisterNewClass(L"CTIFA Settings", SettingsProc);
@@ -185,24 +207,19 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	bool isCanCTIFA = RegisterHotKey(hwnd, HK_CTIFA_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'H');
 	bool isCanFBL = RegisterHotKey(hwnd, HK_FBL_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_F6);
 	if (!isCanCTIFA || !isCanFBL) {
-		MessageBox(NULL, L"Не удалось зарегистрировать горячие клавиши", L"Ошибка", MB_ICONERROR);
+		MBERROR(ET_HOTKEY);
 		UnregisterHotKey(hwnd, HK_CTIFA_ID);
 		UnregisterHotKey(hwnd, HK_FBL_ID);
 		ReleaseMutex(hMutex);
 		return -1;
 	}
-	NOTIFYICONDATA nid = {};
+	AddTrayIcon(hwnd);
 	{
-		nid.cbSize = sizeof(NOTIFYICONDATA);
-		nid.hWnd = hwnd;
-		nid.uID = 1;
-		nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-		nid.uCallbackMessage = TRAY_ICON_MESSAGE;
-		nid.hIcon = LoadIcon(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
-		wcscpy_s(nid.szTip, L"Скрытые окна");
+		CheckFolderAndFile();
+		std::string favorites = ReadSettingsFile();
+		if (favorites.size())
+			deserializeFromString(favorites);
 	}
-	Shell_NotifyIcon(NIM_ADD, &nid);
-
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);

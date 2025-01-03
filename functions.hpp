@@ -1,15 +1,23 @@
-#pragma once
+п»ї#pragma once
 #include <string>
 #include <vector>
 #include <windows.h>
+#include <Psapi.h>
+#include <ShlObj.h>
+#include <sstream>
 #include "resource.h"
 #define POINT2CORD(point) point.left, point.top, point.right - point.left, point.bottom - point.top
+#define SIZEOF(str) (sizeof(str) / sizeof(str[0]))
+#define MBATTENTION(str) MessageBox(NULL, str, L"Р’РЅРёРјР°РЅРёРµ!", MB_ICONWARNING)
+#define MBERROR(str) MessageBox(NULL, str, L"РћС€РёР±РєР°!", MB_ICONERROR)
 
 #define HK_CTIFA_ID 1
 #define HK_FBL_ID 2
+#define TB_SETTINGS 1
+#define TB_EXIT 2
 #define TRAY_ICON_MESSAGE (WM_USER + 1)
-#define CX 600
-#define CY 375
+#define wndX 700
+#define wndY 375
 #define ID_LIST_APPLICATIONS 11
 #define ID_LIST_FAVORITES    12
 #define ID_BUTTON_ADD        13
@@ -28,7 +36,11 @@ struct HiddenWindow {
 	std::wstring windowTitle;
 	HICON hIcon = 0;
 	DWORD processID = 0;
+	bool isFavorite = 0;
+	std::wstring className;
+	std::wstring processName;
 };
+typedef HiddenWindow FavoriteWindow;
 struct FullscreenBorderlessWindow {
 	HWND hwnd;
 	DWORD dwStyle;
@@ -36,20 +48,24 @@ struct FullscreenBorderlessWindow {
 	RECT rect;
 };
 extern std::vector<HiddenWindow> hiddenWindows;
+extern std::vector<FavoriteWindow> favoriteWindows;
 extern std::vector<FullscreenBorderlessWindow> fullscreenBorderlessWindows;
 
 extern ProgramVariable pv;
 
-static std::wstring wstr[] = {
-			L"Shell_TrayWnd", //Панель задач
-			L"Progman", //Рабочий стол
-			L"TaskManagerWindow", //Диспетчер задач
-			L"TopLevelWindowForOverflowXamlIsland", //Скрытая панель трея
-			L"WinUIDesktopWin32WindowClass", //Всплывающие окно трея у приложений использующих WinUI3
-			L"SystemTray_Main", //Всплывающие окно трея у системных приложений
-			L"Windows.UI.Core.CoreWindow",//Другие окна UI Windows
-			L"WindowsDashboard", //Панель слева
-			L"CTRIFATrayApp" //myself
+static std::wstring exceptionClassNames[] = {
+			L"",
+			L"Shell_TrayWnd", //РџР°РЅРµР»СЊ Р·Р°РґР°С‡
+			L"Progman", //Р Р°Р±РѕС‡РёР№ СЃС‚РѕР»
+			L"TaskManagerWindow", //Р”РёСЃРїРµС‚С‡РµСЂ Р·Р°РґР°С‡
+			L"TopLevelWindowForOverflowXamlIsland", //РЎРєСЂС‹С‚Р°СЏ РїР°РЅРµР»СЊ С‚СЂРµСЏ
+			L"WinUIDesktopWin32WindowClass", //Р’СЃРїР»С‹РІР°СЋС‰РёРµ РѕРєРЅРѕ С‚СЂРµСЏ Сѓ РїСЂРёР»РѕР¶РµРЅРёР№ РёСЃРїРѕР»СЊР·СѓСЋС‰РёС… WinUI3
+			L"SystemTray_Main", //Р’СЃРїР»С‹РІР°СЋС‰РёРµ РѕРєРЅРѕ С‚СЂРµСЏ Сѓ СЃРёСЃС‚РµРјРЅС‹С… РїСЂРёР»РѕР¶РµРЅРёР№
+			L"Windows.UI.Core.CoreWindow",//Р”СЂСѓРіРёРµ РѕРєРЅР° UI Windows
+			L"WindowsDashboard", //РџР°РЅРµР»СЊ СЃР»РµРІР°
+			L"CTRIFATrayApp", //myself
+			L"CTIFA Settings", //myself2
+			L"Xaml_WindowedPopupClass" //РџСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ РѕРєРЅР°
 };
 
 WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc);
@@ -60,5 +76,16 @@ void OpenSettings();
 void UpdateTrayMenu();
 void CloseApp();
 void UpdateApplicationsList();
-void CollapseToTray(HWND activeWnd, std::wstring className);
+void UpdateFavoriteList();
+void CollapseToTray(HWND hwnd, HiddenWindow* HW = nullptr);
 void CollapseToTrayFromFavorite();
+void DeleteList(HWND list);
+std::wstring GetAllowedClassName(HWND hwnd);
+DWORD GetProcessId(HWND hwnd);
+std::wstring GetProcessName(DWORD processID);
+std::wstring s2ws(const std::string& str);
+void CheckFolderAndFile();
+std::string ReadSettingsFile();
+std::string serializeToString(const FavoriteWindow& s);
+void deserializeFromString(const std::string& str);
+void WriteSettingsFile(const std::string& content);
