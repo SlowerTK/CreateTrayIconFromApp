@@ -2,8 +2,7 @@
 #include "functions.hpp"
 bool isDebugMode = false;
 std::vector<HiddenWindow> hiddenWindows = {};
-std::vector<FavoriteWindow> favoriteWindows = {};
-std::vector<FullscreenBorderlessWindow> fullscreenBorderlessWindows = {};
+std::vector<HiddenWindow> favoriteWindows = {};
 ProgramVariable pv = {0};
 WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
 	WNDCLASS wc;
@@ -16,12 +15,12 @@ WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
 	RegisterClass(&wc);
 	return wc;
 }
-bool RunAsAdmin() {
+bool isRunAsAdmin() {
 	BOOL isAdmin = FALSE;
 	PSID adminGroup = NULL;
 	SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
 	if (AllocateAndInitializeSid(&NtAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
-								 DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+								 DOMAIN_ALIAS_RID_ADMINS, NULL, NULL, NULL, NULL, NULL, NULL, &adminGroup)) {
 		if (!CheckTokenMembership(NULL, adminGroup, &isAdmin)) {
 			isAdmin = FALSE;
 		}
@@ -29,12 +28,12 @@ bool RunAsAdmin() {
 	}
 	return isAdmin;
 }
-void DebugModCheck(WCHAR* lpCmdLine) {
+void DebugModCheck(wchar_t* lpCmdLine) {
 	int argsCount;
 	wchar_t** cmdArpvLine;
 	if (cmdArpvLine = CommandLineToArgvW(lpCmdLine, &argsCount))
 		for (int i = 0; i != argsCount; i++)
-			if (!lstrcmpW(cmdArpvLine[i], L"debug")) {
+			if (!lstrcmpW(cmdArpvLine[i], DEBUG_STRING)) {
 				isDebugMode = true;
 				break;
 			}
@@ -42,7 +41,7 @@ void DebugModCheck(WCHAR* lpCmdLine) {
 void OpenSettings() {
 	if (!pv.settWin)
 		pv.settWin = CreateWindowExW(0, pv.wc2.lpszClassName, pv.wc2.lpszClassName, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
-									 (GetSystemMetrics(SM_CXSCREEN) - wndX) >> 1, (GetSystemMetrics(SM_CYSCREEN) - wndY) >> 1, wndX, wndY, 0, 0, pv.hInstance, 0);
+									(GetSystemMetrics(SM_CXSCREEN) - wndX) >> 1, (GetSystemMetrics(SM_CYSCREEN) - wndY) >> 1, wndX, wndY, 0, 0, pv.hInstance, 0);
 	else SetForegroundWindow(pv.settWin);
 }
 static HBITMAP IconToBitmap(HICON hIcon) {
@@ -62,28 +61,19 @@ static HBITMAP IconToBitmap(HICON hIcon) {
 	ReleaseDC(NULL, hdcScreen);
 	return hBitmap;
 }
-void UpdateTrayMenu() {
-	if (pv.hMenu) {
-		DestroyMenu(pv.hMenu);
-	}
+void UpdateTrayMenu(bool isDebug) {
+	if (pv.hMenu) DestroyMenu(pv.hMenu);
 	pv.hMenu = CreatePopupMenu();
 	for (UINT i = 0; i < hiddenWindows.size(); ++i) {
 		UINT id = 1000 + i;
-		AppendMenu(pv.hMenu, MF_STRING, id, isDebugMode ? hiddenWindows[i].className.c_str() : hiddenWindows[i].windowTitle.c_str());
+		AppendMenu(pv.hMenu, MF_STRING, id, (isDebugMode || isDebug) ? hiddenWindows[i].processName.c_str() : hiddenWindows[i].windowTitle.c_str());
 		HBITMAP hBitmap = IconToBitmap(hiddenWindows[i].hIcon);
-		if (hBitmap) {
-			SetMenuItemBitmaps(pv.hMenu, id, MF_BYCOMMAND, hBitmap, hBitmap);
-		}
+		if (hBitmap) SetMenuItemBitmaps(pv.hMenu, id, MF_BYCOMMAND, hBitmap, hBitmap);
 	}
-	if (!hiddenWindows.empty()) {
-		AppendMenu(pv.hMenu, MF_SEPARATOR, 0, NULL);
-	}
-	if (isDebugMode)
-		AppendMenu(pv.hMenu, MF_STRING | MF_DISABLED, 0, L"Debug mode is enabled");
-	else
-		AppendMenu(pv.hMenu, MF_STRING | MF_DISABLED, 0, L"Ctrl + Alt + H");
-	AppendMenu(pv.hMenu, MF_STRING, TB_SETTINGS, L"Настройки");
-	AppendMenu(pv.hMenu, MF_STRING, TB_EXIT, L"Выход");
+	if (!hiddenWindows.empty()) AppendMenu(pv.hMenu, MF_SEPARATOR, NULL, NULL);
+	AppendMenu(pv.hMenu, MF_STRING | MF_DISABLED, 0, TB_HOTKEY_TEXT);
+	AppendMenu(pv.hMenu, MF_STRING, TB_SETTINGS, TB_SETTINGS_TEXT);
+	AppendMenu(pv.hMenu, MF_STRING, TB_EXIT, TB_EXIT_TEXT);
 }
 void CloseApp() {
 	for (const auto& hiddenWindow : hiddenWindows) {
@@ -95,23 +85,102 @@ void CloseApp() {
 	}
 	PostQuitMessage(0);
 }
+std::wstring GetProcessCommandLine(DWORD processID) {
+	HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+	if (FAILED(hres)) {
+		return L"";
+		//return L"Ошибка инициализации COM.";
+	}
+
+	hres = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT,
+								RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
+	if (FAILED(hres)) {
+		CoUninitialize();
+		return L"";
+		//return L"Ошибка настройки безопасности COM.";
+	}
+
+	IWbemLocator* pLoc = NULL;
+	hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLoc);
+	if (FAILED(hres)) {
+		CoUninitialize();
+		return L"";
+		//return L"Не удалось создать WMI-локатор.";
+	}
+
+	IWbemServices* pSvc = NULL;
+	hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), NULL, NULL, 0, NULL, 0, 0, &pSvc);
+	if (FAILED(hres)) {
+		pLoc->Release();
+		CoUninitialize();
+		return L"";
+		//return L"Не удалось подключиться к WMI.";
+	}
+
+	hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE);
+	if (FAILED(hres)) {
+		pSvc->Release();
+		pLoc->Release();
+		CoUninitialize();
+		return L"";
+		//return L"Не удалось установить параметры безопасности.";
+	}
+
+	IEnumWbemClassObject* pEnumerator = NULL;
+	std::wstring query = QUERY + std::to_wstring(processID);
+
+	hres = pSvc->ExecQuery(bstr_t("WQL"), bstr_t(query.c_str()), WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, NULL, &pEnumerator);
+
+	if (FAILED(hres)) {
+		pSvc->Release();
+		pLoc->Release();
+		CoUninitialize();
+		return L"";
+		//return L"Не удалось выполнить запрос WMI.";
+	}
+
+	IWbemClassObject* pClsObj = NULL;
+	ULONG uReturn = 0;
+	VARIANT vtProp{};
+
+	std::wstring commandLine = L"";
+	if (pEnumerator->Next(WBEM_INFINITE, 1, &pClsObj, &uReturn) == S_OK) {
+		hres = pClsObj->Get(L"CommandLine", 0, &vtProp, 0, 0);
+		if (SUCCEEDED(hres) && vtProp.vt == VT_BSTR) {
+			commandLine = vtProp.bstrVal;
+		} else {
+			commandLine = ET_COMMANDLINE;
+		}
+		VariantClear(&vtProp);
+		pClsObj->Release();
+	} else {
+		commandLine = ET_COMMANDLINE_PROC;
+	}
+
+	pEnumerator->Release();
+	pSvc->Release();
+	pLoc->Release();
+	CoUninitialize();
+
+	return commandLine.empty() ? ET_ARGLOST : commandLine;
+}
 BOOL CALLBACK EnumWindowsAppProc(HWND hwnd, LPARAM lParam) {
 	HWND hApplicationsList = (HWND)lParam;
-	WCHAR windowTitle[MAX_PATH] = {0};
+	wchar_t windowTitle[MAX_PATH] = {0};
 
 	if (IsWindowVisible(hwnd) && GetWindowTextW(hwnd, windowTitle, SIZEOF(windowTitle)) > 0) {
-		std::wstring className = GetAllowedClassName(hwnd);
-		if (!className.size())
+		std::wstring className = GetWstringClassName(hwnd);
+		if (className.empty())
+			return true;
+		DWORD processID = GetProcessId(hwnd);
+		std::wstring processName = GetAllowedProcessName(processID);
+		if (processName.empty())
 			return true;
 
-		DWORD processID = GetProcessId(hwnd);
-		std::wstring processName = GetProcessName(processID);
-		if (!processName.size())
-			return true;
-		int count = (int)SendMessage(pv.hFavoritesList, LB_GETCOUNT, 0, 0);
+		int count = (int)SendMessage(pv.hFavoritesList, LB_GETCOUNT, NULL, NULL);
 		if (count)
 			for (int i = 0; i < count; i++) {
-				HiddenWindow* hw = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, 0);
+				HiddenWindow* hw = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, NULL);
 				if (hw->processName == processName && hw->hwnd == hwnd)
 					return true;
 			}
@@ -123,7 +192,7 @@ BOOL CALLBACK EnumWindowsAppProc(HWND hwnd, LPARAM lParam) {
 		HW->processID = processID;
 		HW->processName = processName;
 		HW->isFavorite = false;
-		int index = (int)SendMessage(hApplicationsList, LB_ADDSTRING, 0, (LPARAM)windowTitle);
+		int index = (int)SendMessage(hApplicationsList, LB_ADDSTRING, NULL, (LPARAM)windowTitle);
 		SendMessage(hApplicationsList, LB_SETITEMDATA, index, (LPARAM)HW);
 	}
 	return true;
@@ -138,8 +207,8 @@ void UpdateFavoriteList() {
 	if (!pv.hFavoritesList)
 		return;
 	DeleteList(pv.hFavoritesList);
-	for (const auto& hw : favoriteWindows){
-		FavoriteWindow* HW = new FavoriteWindow;
+	for (const auto& hw : favoriteWindows) {
+		HiddenWindow* HW = new HiddenWindow;
 		HW->hwnd = hw.hwnd;
 		HW->windowTitle = hw.windowTitle;
 		HW->className = hw.className;
@@ -147,13 +216,12 @@ void UpdateFavoriteList() {
 		HW->processID = hw.processID;
 		HW->processName = hw.processName;
 		HW->isFavorite = hw.isFavorite;
-		int index = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, 0, (LPARAM)hw.windowTitle.c_str());
+		HW->comandLine = hw.comandLine;
+		int index = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)hw.windowTitle.c_str());
 		SendMessage(pv.hFavoritesList, LB_SETITEMDATA, index, (LPARAM)HW);
-		}
+	}
 }
-void CollapseToTray(HWND hwnd, HiddenWindow* HW) {
-	wchar_t windowTitle[MAX_PATH];
-	ZeroMemory(&windowTitle, SIZEOF(windowTitle));
+HICON GetIcon(HWND hwnd) {
 	HICON hIcon = (HICON)SendMessage(hwnd, WM_GETICON, ICON_SMALL, 0);
 	if (!hIcon) {
 		hIcon = (HICON)GetClassLongPtr(hwnd, GCLP_HICONSM);
@@ -161,73 +229,70 @@ void CollapseToTray(HWND hwnd, HiddenWindow* HW) {
 			hIcon = LoadIconW(NULL, IDI_APPLICATION);
 		}
 	}
+	return hIcon;
+}
+void CollapseToTray(HWND hwnd, HiddenWindow* HW) {
 	if (HW == nullptr) {
-		HiddenWindow HW;
-		GetWindowText(hwnd, windowTitle, SIZEOF(windowTitle));
-		HW.hwnd = hwnd;
-		HW.processID = GetProcessId(hwnd);
-		HW.processName = GetProcessName(HW.processID);
-		if (wcslen(windowTitle) == 0) {
-			wcscpy_s(windowTitle, HW.processName.c_str());
-		}
-		HW.windowTitle = windowTitle;
-		HW.className = GetAllowedClassName(hwnd);
-		HW.hIcon = hIcon;
-		HW.isFavorite = false;
-		hiddenWindows.push_back(HW);
+		DWORD processID = GetProcessId(hwnd);
+		std::wstring processName = GetAllowedProcessName(processID);
+		if (processName.empty())
+			return;
+		std::wstring className = GetWstringClassName(hwnd);
+		if (className.empty())
+			return;
+		wchar_t windowTitle[MAX_PATH];
+		ZeroMemory(&windowTitle, SIZEOF(windowTitle));
+		GetWindowTextW(hwnd, windowTitle, SIZEOF(windowTitle));
+		hiddenWindows.push_back({hwnd, GetIcon(hwnd), processID, false, windowTitle, className, processName, GetProcessCommandLine(processID)});
 	} else {
-		HW->hIcon = hIcon;
+		HW->hIcon = GetIcon(hwnd);
 		hiddenWindows.push_back(*HW);
 	}
 	ShowWindow(hwnd, SW_HIDE);
-	UpdateTrayMenu();
-
+	UpdateTrayMenu(false);
 }
 void CollapseToTrayFromFavorite() {
-	int count = (int)SendMessage(pv.hFavoritesList, LB_GETCOUNT, 0, 0);
-	if (count == LB_ERR)
-		return;
-	HiddenWindow* HW;
-	for (int i = 0; i < count; i++) {
-		HW = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, 0);
-		auto it = std::find_if(hiddenWindows.begin(), hiddenWindows.end(),
-							   [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; });
-		if (it == hiddenWindows.end()) {
+	int count = static_cast<int>(SendMessage(pv.hFavoritesList, LB_GETCOUNT, 0, 0));
+	if (count == LB_ERR) return;
+
+	for (int i = 0; i < count; ++i) {
+		HiddenWindow* HW = reinterpret_cast<HiddenWindow*>(SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, 0));
+
+		if (HW->isFavorite != SAVED_WINDOW && std::none_of(hiddenWindows.begin(), hiddenWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; })) {
+			HW->comandLine = GetProcessCommandLine(HW->processID);
+			if (std::none_of(favoriteWindows.begin(), favoriteWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; }))
+				favoriteWindows.push_back(*HW);
 			CollapseToTray(HW->hwnd, HW);
 		}
 	}
 }
 void DeleteList(HWND list) {
 	if (list) {
-		int count = (int)SendMessage(list, LB_GETCOUNT, 0, 0);
+		int count = (int)SendMessage(list, LB_GETCOUNT, NULL, NULL);
 		if (count)
 			for (int i = 0; i < count; i++) {
-				HiddenWindow* HW = (HiddenWindow*)SendMessage(list, LB_GETITEMDATA, i, 0);
+				HiddenWindow* HW = (HiddenWindow*)SendMessage(list, LB_GETITEMDATA, i, NULL);
 				delete HW;
 			}
-		SendMessage(list, LB_RESETCONTENT, 0, 0);
+		SendMessage(list, LB_RESETCONTENT, NULL, NULL);
 	}
 }
-std::wstring GetAllowedClassName(HWND hwnd) {
-	std::wstring className;
+std::wstring GetWstringClassName(HWND hwnd) {
 	wchar_t classNam[256];
 	ZeroMemory(&classNam, SIZEOF(classNam));
 	GetClassNameW(hwnd, classNam, SIZEOF(classNam));
-	className = classNam;
-	for (const auto& t : exceptionClassNames) {
-		if (t == className)
-			return L"";
-	}
-	return className;
+	if (lstrcmpW(classNam, pv.wc2.lpszClassName) == 0)
+		return L"";
+	return classNam;
 }
 DWORD GetProcessId(HWND hwnd) {
 	DWORD processID;
 	GetWindowThreadProcessId(hwnd, &processID);
 	return processID;
 }
-std::wstring GetProcessName(DWORD processID) {
+std::wstring GetAllowedProcessName(DWORD processID) {
 	std::wstring processName = L"";
-	WCHAR processNam[MAX_PATH] = {0};
+	wchar_t processNam[MAX_PATH] = {0};
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
 	if (hProcess) {
 		HMODULE hMod;
@@ -237,27 +302,25 @@ std::wstring GetProcessName(DWORD processID) {
 		processName = processNam;
 		CloseHandle(hProcess);
 	}
+	for (const auto& t : exceptionProcessNames) {
+		if (t == processName)
+			return L"";
+	}
 	return processName;
 }
-std::wstring s2ws(const std::string& str) {
-	int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
-	std::wstring wstrTo(size_needed, 0);
-	MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
-	return wstrTo;
-}
 void CheckFolderAndFile() {
-	char appDataPath[MAX_PATH];
-	if (FAILED(SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, appDataPath))) {
+	wchar_t appDataPath[MAX_PATH];
+	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
 		MBATTENTION(ET_APPDATA);
 		return;
 	}
-	std::string folderPath = std::string(appDataPath) + FOLDER;
-	if (CreateDirectoryA(folderPath.c_str(), NULL) == 0 && GetLastError() != ERROR_ALREADY_EXISTS) {
+	std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
+	if (CreateDirectory(folderPath.c_str(), NULL) == NULL && GetLastError() != ERROR_ALREADY_EXISTS) {
 		MBATTENTION(ET_CREATEFOLDER);
 		return;
 	}
-	std::string filePath = folderPath + FILEname;
-	HANDLE hFile = CreateFileA(filePath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	std::wstring filePath = folderPath + FILEPATHNAME;
+	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 
 	if (hFile == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_EXISTS) {
 		MBATTENTION(ET_CREATEFILE);
@@ -268,96 +331,118 @@ void CheckFolderAndFile() {
 		return;
 	}
 }
-std::string ReadSettingsFile() {
-	char appDataPath[MAX_PATH];
-	if (FAILED(SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, appDataPath))) {
+std::wstring ReadSettingsFile() {
+	wchar_t appDataPath[MAX_PATH];
+	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
 		MBATTENTION(ET_APPDATA);
-		return "";
+		return L"";
 	}
-	std::string filePath = std::string(appDataPath) + FOLDERFILE;
-	HANDLE hFile = CreateFileA(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + FILEPATHNAME;
+	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		MBATTENTION(ET_FILEOPEN);
-		return "";
+		return L"";
 	}
 	LARGE_INTEGER fileSize;
 	if (!GetFileSizeEx(hFile, &fileSize)) {
 		MBATTENTION(ET_FILESIZE);
 		CloseHandle(hFile);
-		return "";
+		return L"";
 	}
-	std::string content(fileSize.QuadPart, '\0');
+	std::wstring content(fileSize.QuadPart, L'\0');
 	DWORD bytesRead;
 	if (!ReadFile(hFile, &content[0], (DWORD)fileSize.QuadPart, &bytesRead, NULL) || bytesRead != fileSize.QuadPart) {
 		MBATTENTION(ET_FILECONTENT);
 		CloseHandle(hFile);
-		return "";
+		return L"";
 	}
 	CloseHandle(hFile);
 	return content;
 }
-void WriteSettingsFile(const std::string& content) {
-	char appDataPath[MAX_PATH];
-	if (FAILED(SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, appDataPath))) {
+void WriteSettingsFile(const std::wstring& content) {
+	wchar_t appDataPath[MAX_PATH];
+	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
 		MBATTENTION(ET_APPDATA);
 		return;
 	}
-	std::string filePath = std::string(appDataPath) + FOLDERFILE;
-	HANDLE hFile = CreateFileA(filePath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + FILEPATHNAME;
+	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		MBATTENTION(ET_FILEOPEN);
 		return;
 	}
 	DWORD bytesWritten;
-	if (!WriteFile(hFile, content.c_str(), static_cast<DWORD>(content.size()), &bytesWritten, NULL)) {
+	if (!WriteFile(hFile, content.c_str(), static_cast<DWORD>(content.length() * sizeof(wchar_t)), &bytesWritten, NULL)) {
 		MBATTENTION(ET_FILEWRITE);
 	}
 	CloseHandle(hFile);
 }
-
-std::string ws2s(const std::wstring& wstr) {
-	int size_needed = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
-	std::string str(size_needed - 1, '\0');
-	WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size_needed, nullptr, nullptr);
-	return str;
-}
-std::string serializeToString(const FavoriteWindow& s) {
-	std::ostringstream oss;
-	oss << reinterpret_cast<uintptr_t>(s.hwnd) << "|"
-		<< ws2s(s.windowTitle) << "|"
-		<< reinterpret_cast<uintptr_t>(s.hIcon) << "|"
-		<< s.processID << "|"
-		<< ws2s(s.className) << "|"
-		<< ws2s(s.processName) << "\n";
+std::wstring serializeToWstring(const HiddenWindow& s) {
+	std::wostringstream oss;
+	oss << s.windowTitle << L'|'
+		<< s.className << L'|'
+		<< s.processName << L'|'
+		<< s.comandLine << L'\n';
 	return oss.str();
 }
-FavoriteWindow deserializeOne(const std::string& str) {
-	std::istringstream iss(str);
-	FavoriteWindow s;
-	std::string token;
-	std::getline(iss, token, '|');
-	s.hwnd = reinterpret_cast<HWND>(std::stoull(token));
-	std::getline(iss, token, '|');
-	s.windowTitle = s2ws(token);
-	std::getline(iss, token, '|');
-	s.hIcon = reinterpret_cast<HICON>(std::stoull(token));
-	std::getline(iss, token, '|');
-	s.processID = std::stoul(token);
-	std::getline(iss, token, '|');
-	s.className = s2ws(token);
-	std::getline(iss, token, '\n');
-	s.processName = s2ws(token);
+BOOL CALLBACK EnumWindowsHWND(HWND hwnd, LPARAM lParam) {
+	HiddenWindow hw = *(HiddenWindow*)lParam;
+	hw.processID = GetProcessId(hwnd);
+	std::wstring processName = GetAllowedProcessName(hw.processID);
+	if (processName == L"") {
+		return TRUE;
+	}
+	if (processName == hw.processName) {
+		hw.hwnd = hwnd;
+		hw.processName = processName;
+		*(HiddenWindow*)lParam = hw;
+		return FALSE;
+	}
+	return TRUE;
+}
+void FindWindowFromFile(HiddenWindow& s, bool isFromFile) {
+	EnumWindows(EnumWindowsHWND, (LPARAM)&s);
+	if (isFromFile) s.isFavorite = SAVED_WINDOW;
+	if (s.hwnd && s.isFavorite == SAVED_WINDOW) {
+		wchar_t windowTitle[MAX_PATH];
+		ZeroMemory(&windowTitle, SIZEOF(windowTitle));
+		GetWindowTextW(s.hwnd, windowTitle, SIZEOF(windowTitle));
+		if (lstrcmpW(windowTitle, s.windowTitle.c_str()) == 0) {
+			s.isFavorite = true;
+			CollapseToTray(s.hwnd, &s);
+		}
+	}
+}
+HiddenWindow deserializeOne(const std::wstring& str) {
+	std::wistringstream iss(str);
+	HiddenWindow s{};
+	std::wstring token;
+	std::getline(iss, token, L'|');
+	s.windowTitle = token;
+	std::getline(iss, token, L'|');
+	s.className = token;
+	std::getline(iss, token, L'|');
+	s.processName = token;
+	std::getline(iss, token, L'\n');
+	s.comandLine = token;
+	FindWindowFromFile(s, true);
 	return s;
 }
-void deserializeFromString(const std::string& str) {
+void deserializeFromWstring(const std::wstring& str) {
 	std::vector<HiddenWindow> result;
-	std::istringstream iss(str);
-	std::string line;
+	std::wistringstream iss(str);
+	std::wstring line;
 
 	while (std::getline(iss, line)) {
-		if (!line.empty()) {
+		if (*line.c_str() != L'\0') {
 			result.push_back(deserializeOne(line));
+			line.clear();
 		}
 	}
 	favoriteWindows = result;
+	result.clear();
+	for (const auto& hw : favoriteWindows)
+		if (hw.isFavorite == TRUE)
+			result.push_back(hw);
+	hiddenWindows = result;
 }

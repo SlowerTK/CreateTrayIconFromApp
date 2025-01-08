@@ -2,45 +2,35 @@
 #include <string>
 #include <vector>
 #include <windows.h>
+#include "resource.h"
+#include <algorithm>
+#include <comdef.h>
+#include <Wbemidl.h>
 #include <Psapi.h>
 #include <ShlObj.h>
 #include <sstream>
-#include "resource.h"
-#define POINT2CORD(point) point.left, point.top, point.right - point.left, point.bottom - point.top
-#define SIZEOF(str) (sizeof(str) / sizeof(str[0]))
-#define MBATTENTION(str) MessageBox(NULL, str, L"Внимание!", MB_ICONWARNING)
-#define MBERROR(str) MessageBox(NULL, str, L"Ошибка!", MB_ICONERROR)
+#pragma comment(lib, "wbemuuid.lib")
 
-#define HK_CTIFA_ID 1
-#define HK_FBL_ID 2
-#define TB_SETTINGS 1
-#define TB_EXIT 2
-#define TRAY_ICON_MESSAGE (WM_USER + 1)
-#define wndX 700
-#define wndY 375
-#define ID_LIST_APPLICATIONS 11
-#define ID_LIST_FAVORITES    12
-#define ID_BUTTON_ADD        13
-#define ID_BUTTON_REMOVE     14
-#define TID_UPDATE	1
 extern bool isDebugMode;
 struct ProgramVariable {
 	HWND settWin;
 	WNDCLASS wc1, wc2;
 	HINSTANCE hInstance;
 	HMENU hMenu;
-	HWND hApplicationsList, hFavoritesList, hAddButton, hRemoveButton, hText;
+	HWND hApplicationsList, hFavoritesList, hAddButton, hRemoveButton, hText, hReloadButton;
+	UINT WM_TASKBAR_CREATED;
 };
 struct HiddenWindow {
 	HWND hwnd = 0;
-	std::wstring windowTitle;
 	HICON hIcon = 0;
 	DWORD processID = 0;
-	bool isFavorite = 0;
+	DWORD isFavorite = 0;
+	std::wstring windowTitle;
 	std::wstring className;
 	std::wstring processName;
+	std::wstring comandLine;
 };
-typedef HiddenWindow FavoriteWindow;
+
 struct FullscreenBorderlessWindow {
 	HWND hwnd;
 	DWORD dwStyle;
@@ -48,44 +38,53 @@ struct FullscreenBorderlessWindow {
 	RECT rect;
 };
 extern std::vector<HiddenWindow> hiddenWindows;
-extern std::vector<FavoriteWindow> favoriteWindows;
+extern std::vector<HiddenWindow> favoriteWindows;
 extern std::vector<FullscreenBorderlessWindow> fullscreenBorderlessWindows;
 
 extern ProgramVariable pv;
 
-static std::wstring exceptionClassNames[] = {
-			L"",
-			L"Shell_TrayWnd", //Панель задач
-			L"Progman", //Рабочий стол
-			L"TaskManagerWindow", //Диспетчер задач
-			L"TopLevelWindowForOverflowXamlIsland", //Скрытая панель трея
-			L"WinUIDesktopWin32WindowClass", //Всплывающие окно трея у приложений использующих WinUI3
-			L"SystemTray_Main", //Всплывающие окно трея у системных приложений
-			L"Windows.UI.Core.CoreWindow",//Другие окна UI Windows
-			L"WindowsDashboard", //Панель слева
-			L"CTRIFATrayApp", //myself
-			L"CTIFA Settings", //myself2
-			L"Xaml_WindowedPopupClass" //Предпросмотр окна
+static std::wstring exceptionProcessNames[] = {
+	L"", //Пустая строка
+	L"Explorer.EXE", //Проводник
+	L"TextInputHost.exe", //Интерфейс ввода windows
+	L"ShellExperienceHost.exe", //Центр уведомлений
+	L"ShellHost.exe", //Быстрые настройки
+	L"SearchHost.exe", //Поиск
+	L"PowerToys.PowerLauncher.exe", //PowerToys Run
+	L"ApplicationFrameHost.exe", //Параметры
+	L"SystemSettings.exe", //Параметры
+
+			//L"Shell_TrayWnd", //Панель задач
+			//L"Progman", //Рабочий стол
+			//L"TaskManagerWindow", //Диспетчер задач
+			//L"TopLevelWindowForOverflowXamlIsland", //Скрытая панель трея
+			//L"WinUIDesktopWin32WindowClass", //Всплывающие окно трея у приложений использующих WinUI3
+			//L"SystemTray_Main", //Всплывающие окно трея у системных приложений
+			//L"Windows.UI.Core.CoreWindow",//Другие окна UI Windows
+			//L"WindowsDashboard", //Панель слева
+			//L"CTRIFATrayApp", //myself
+			//L"CTIFA Settings", //myself2
+			//L"Xaml_WindowedPopupClass" //Предпросмотр окна
 };
 
 WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc);
-bool RunAsAdmin();
-void DebugModCheck(WCHAR* lpCmdLine);
+bool isRunAsAdmin();
+void DebugModCheck(wchar_t* lpCmdLine);
 static HBITMAP IconToBitmap(HICON hIcon);
 void OpenSettings();
-void UpdateTrayMenu();
+void UpdateTrayMenu(bool isDebug);
 void CloseApp();
 void UpdateApplicationsList();
 void UpdateFavoriteList();
 void CollapseToTray(HWND hwnd, HiddenWindow* HW = nullptr);
 void CollapseToTrayFromFavorite();
 void DeleteList(HWND list);
-std::wstring GetAllowedClassName(HWND hwnd);
+std::wstring GetWstringClassName(HWND hwnd);
 DWORD GetProcessId(HWND hwnd);
-std::wstring GetProcessName(DWORD processID);
-std::wstring s2ws(const std::string& str);
+std::wstring GetAllowedProcessName(DWORD processID);
 void CheckFolderAndFile();
-std::string ReadSettingsFile();
-std::string serializeToString(const FavoriteWindow& s);
-void deserializeFromString(const std::string& str);
-void WriteSettingsFile(const std::string& content);
+std::wstring ReadSettingsFile();
+std::wstring serializeToWstring(const HiddenWindow& s);
+void deserializeFromWstring(const std::wstring& str);
+void WriteSettingsFile(const std::wstring& content);
+void FindWindowFromFile(HiddenWindow& s, bool isFile);
