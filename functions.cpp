@@ -1,6 +1,5 @@
 ﻿#pragma once
 #include "functions.hpp"
-bool isDebugMode = false;
 std::vector<HiddenWindow> hiddenWindows = {};
 std::vector<HiddenWindow> favoriteWindows = {};
 ProgramVariable pv = {0};
@@ -29,19 +28,20 @@ bool isRunAsAdmin() {
 	return isAdmin;
 }
 void DebugModCheck(wchar_t* lpCmdLine) {
+	pv.isDebugMode = false;
 	int argsCount;
 	wchar_t** cmdArpvLine;
 	if (cmdArpvLine = CommandLineToArgvW(lpCmdLine, &argsCount))
 		for (int i = 0; i != argsCount; i++)
 			if (!lstrcmpW(cmdArpvLine[i], DEBUG_STRING)) {
-				isDebugMode = true;
+				pv.isDebugMode = true;
 				break;
 			}
 }
 void OpenSettings() {
 	if (!pv.settWin)
-		pv.settWin = CreateWindowExW(0, pv.wc2.lpszClassName, pv.wc2.lpszClassName, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
-									(GetSystemMetrics(SM_CXSCREEN) - wndX) >> 1, (GetSystemMetrics(SM_CYSCREEN) - wndY) >> 1, wndX, wndY, 0, 0, pv.hInstance, 0);
+		pv.settWin = CreateWindowExW(WS_EX_TOPMOST, pv.wc2.lpszClassName, pv.isAdminMode ? pv.wc2.lpszClassName : WND_TITLE, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
+									 (GetSystemMetrics(SM_CXSCREEN) - wndX) >> 1, (GetSystemMetrics(SM_CYSCREEN) - wndY) >> 1, wndX, wndY, 0, 0, pv.hInstance, 0);
 	else SetForegroundWindow(pv.settWin);
 }
 static HBITMAP IconToBitmap(HICON hIcon) {
@@ -64,14 +64,20 @@ static HBITMAP IconToBitmap(HICON hIcon) {
 void UpdateTrayMenu(bool isDebug) {
 	if (pv.hMenu) DestroyMenu(pv.hMenu);
 	pv.hMenu = CreatePopupMenu();
-	for (UINT i = 0; i < hiddenWindows.size(); ++i) {
-		UINT id = 1000 + i;
-		AppendMenu(pv.hMenu, MF_STRING, id, (isDebugMode || isDebug) ? hiddenWindows[i].processName.c_str() : hiddenWindows[i].windowTitle.c_str());
-		HBITMAP hBitmap = IconToBitmap(hiddenWindows[i].hIcon);
+	for (auto it = hiddenWindows.begin(); it != hiddenWindows.end();) {
+		if (!GetWindowThreadProcessId(it->hwnd, NULL)) {
+			it = hiddenWindows.erase(it);
+			continue;
+		}
+		UINT id = static_cast<UINT>(1000) + std::distance(hiddenWindows.begin(), it);
+		AppendMenu(pv.hMenu, MF_STRING, id, (pv.isDebugMode || isDebug) ? it->processName.c_str() : it->windowTitle.c_str());
+		HBITMAP hBitmap = IconToBitmap(it->hIcon);
 		if (hBitmap) SetMenuItemBitmaps(pv.hMenu, id, MF_BYCOMMAND, hBitmap, hBitmap);
+		++it;
 	}
 	if (!hiddenWindows.empty()) AppendMenu(pv.hMenu, MF_SEPARATOR, NULL, NULL);
-	AppendMenu(pv.hMenu, MF_STRING | MF_DISABLED, 0, TB_HOTKEY_TEXT);
+	if (pv.isAdminMode) AppendMenu(pv.hMenu, MF_STRING | MF_DISABLED, TB_RESTART, TB_HOTKEY_TEXT);
+	else AppendMenu(pv.hMenu, MF_STRING, TB_RESTART, NEED_ADMIN_RIGHTS);
 	AppendMenu(pv.hMenu, MF_STRING, TB_SETTINGS, TB_SETTINGS_TEXT);
 	AppendMenu(pv.hMenu, MF_STRING, TB_EXIT, TB_EXIT_TEXT);
 }
@@ -88,24 +94,23 @@ void CloseApp() {
 std::wstring GetProcessCommandLine(DWORD processID) {
 	HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
 	if (FAILED(hres)) {
+		LogAdd(L"Ошибка инициализации COM");
 		return L"";
-		//return L"Ошибка инициализации COM.";
 	}
-
 	hres = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT,
 								RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
 	if (FAILED(hres)) {
 		CoUninitialize();
+		LogAdd(L"Ошибка настройки безопасности COM");
 		return L"";
-		//return L"Ошибка настройки безопасности COM.";
 	}
 
 	IWbemLocator* pLoc = NULL;
 	hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLoc);
 	if (FAILED(hres)) {
 		CoUninitialize();
+		LogAdd(L"Не удалось создать WMI-локатор");
 		return L"";
-		//return L"Не удалось создать WMI-локатор.";
 	}
 
 	IWbemServices* pSvc = NULL;
@@ -113,8 +118,8 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 	if (FAILED(hres)) {
 		pLoc->Release();
 		CoUninitialize();
+		LogAdd(L"Не удалось подключиться к WMI");
 		return L"";
-		//return L"Не удалось подключиться к WMI.";
 	}
 
 	hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE);
@@ -122,8 +127,8 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 		pSvc->Release();
 		pLoc->Release();
 		CoUninitialize();
+		LogAdd(L"Не удалось установить параметры безопасности");
 		return L"";
-		//return L"Не удалось установить параметры безопасности.";
 	}
 
 	IEnumWbemClassObject* pEnumerator = NULL;
@@ -135,8 +140,8 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 		pSvc->Release();
 		pLoc->Release();
 		CoUninitialize();
+		LogAdd(L"Не удалось выполнить запрос WMI");
 		return L"";
-		//return L"Не удалось выполнить запрос WMI.";
 	}
 
 	IWbemClassObject* pClsObj = NULL;
@@ -164,7 +169,7 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 
 	return commandLine.empty() ? ET_ARGLOST : commandLine;
 }
-BOOL CALLBACK EnumWindowsAppProc(HWND hwnd, LPARAM lParam) {
+BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
 	HWND hApplicationsList = (HWND)lParam;
 	wchar_t windowTitle[MAX_PATH] = {0};
 
@@ -178,12 +183,11 @@ BOOL CALLBACK EnumWindowsAppProc(HWND hwnd, LPARAM lParam) {
 			return true;
 
 		int count = (int)SendMessage(pv.hFavoritesList, LB_GETCOUNT, NULL, NULL);
-		if (count)
-			for (int i = 0; i < count; i++) {
-				HiddenWindow* hw = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, NULL);
-				if (hw->processName == processName && hw->hwnd == hwnd)
-					return true;
-			}
+		for (int i = 0; i < count; i++) {
+			HiddenWindow* hw = reinterpret_cast<HiddenWindow*>(SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, NULL));
+			if (hw->processName == processName && hw->hwnd == hwnd)
+				return true;
+		}
 
 		HiddenWindow* HW = new HiddenWindow;
 		HW->hwnd = hwnd;
@@ -201,7 +205,7 @@ void UpdateApplicationsList() {
 	if (!pv.hApplicationsList)
 		return;
 	DeleteList(pv.hApplicationsList);
-	EnumWindows(EnumWindowsAppProc, (LPARAM)pv.hApplicationsList);
+	EnumWindows(EnumWindowsUpdateAppListProc, (LPARAM)pv.hApplicationsList);
 }
 void UpdateFavoriteList() {
 	if (!pv.hFavoritesList)
@@ -209,14 +213,7 @@ void UpdateFavoriteList() {
 	DeleteList(pv.hFavoritesList);
 	for (const auto& hw : favoriteWindows) {
 		HiddenWindow* HW = new HiddenWindow;
-		HW->hwnd = hw.hwnd;
-		HW->windowTitle = hw.windowTitle;
-		HW->className = hw.className;
-		HW->hIcon = hw.hIcon;
-		HW->processID = hw.processID;
-		HW->processName = hw.processName;
-		HW->isFavorite = hw.isFavorite;
-		HW->comandLine = hw.comandLine;
+		*HW = hw;
 		int index = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)hw.windowTitle.c_str());
 		SendMessage(pv.hFavoritesList, LB_SETITEMDATA, index, (LPARAM)HW);
 	}
@@ -231,6 +228,12 @@ HICON GetIcon(HWND hwnd) {
 	}
 	return hIcon;
 }
+std::wstring GetWindowTitle(HWND hwnd) {
+	wchar_t windowTitle[MAX_PATH];
+	ZeroMemory(&windowTitle, SIZEOF(windowTitle));
+	GetWindowTextW(hwnd, windowTitle, SIZEOF(windowTitle));
+	return windowTitle;
+}
 void CollapseToTray(HWND hwnd, HiddenWindow* HW) {
 	if (HW == nullptr) {
 		DWORD processID = GetProcessId(hwnd);
@@ -240,10 +243,7 @@ void CollapseToTray(HWND hwnd, HiddenWindow* HW) {
 		std::wstring className = GetWstringClassName(hwnd);
 		if (className.empty())
 			return;
-		wchar_t windowTitle[MAX_PATH];
-		ZeroMemory(&windowTitle, SIZEOF(windowTitle));
-		GetWindowTextW(hwnd, windowTitle, SIZEOF(windowTitle));
-		hiddenWindows.push_back({hwnd, GetIcon(hwnd), processID, false, windowTitle, className, processName, GetProcessCommandLine(processID)});
+		hiddenWindows.push_back({hwnd, GetIcon(hwnd), processID, false, GetWindowTitle(hwnd), className, processName, GetProcessCommandLine(processID)});
 	} else {
 		HW->hIcon = GetIcon(hwnd);
 		hiddenWindows.push_back(*HW);
@@ -258,23 +258,24 @@ void CollapseToTrayFromFavorite() {
 	for (int i = 0; i < count; ++i) {
 		HiddenWindow* HW = reinterpret_cast<HiddenWindow*>(SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, 0));
 
-		if (HW->isFavorite != SAVED_WINDOW && std::none_of(hiddenWindows.begin(), hiddenWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; })) {
+		if (HW->isFavorite == TRUE && std::none_of(hiddenWindows.begin(), hiddenWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; })) {
 			HW->comandLine = GetProcessCommandLine(HW->processID);
-			if (std::none_of(favoriteWindows.begin(), favoriteWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; }))
+			if (std::none_of(favoriteWindows.begin(), favoriteWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; })){
 				favoriteWindows.push_back(*HW);
+				LogAdd(L"В изброное добавлено " + *HW->className.c_str());
+			}
 			CollapseToTray(HW->hwnd, HW);
 		}
 	}
 }
 void DeleteList(HWND list) {
 	if (list) {
-		int count = (int)SendMessage(list, LB_GETCOUNT, NULL, NULL);
-		if (count)
-			for (int i = 0; i < count; i++) {
-				HiddenWindow* HW = (HiddenWindow*)SendMessage(list, LB_GETITEMDATA, i, NULL);
-				delete HW;
-			}
-		SendMessage(list, LB_RESETCONTENT, NULL, NULL);
+		int count = static_cast<int>(SendMessage(list, LB_GETCOUNT, 0, 0));
+		for (int i = 0; i < count; ++i) {
+			HiddenWindow* HW = reinterpret_cast<HiddenWindow*>(SendMessage(list, LB_GETITEMDATA, i, 0));
+			delete HW;
+		}
+		SendMessage(list, LB_RESETCONTENT, 0, 0);
 	}
 }
 std::wstring GetWstringClassName(HWND hwnd) {
@@ -308,28 +309,26 @@ std::wstring GetAllowedProcessName(DWORD processID) {
 	}
 	return processName;
 }
-void CheckFolderAndFile() {
-	wchar_t appDataPath[MAX_PATH];
-	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
-		MBATTENTION(ET_APPDATA);
-		return;
-	}
-	std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
-	if (CreateDirectory(folderPath.c_str(), NULL) == NULL && GetLastError() != ERROR_ALREADY_EXISTS) {
-		MBATTENTION(ET_CREATEFOLDER);
-		return;
-	}
-	std::wstring filePath = folderPath + FILEPATHNAME;
-	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-
-	if (hFile == INVALID_HANDLE_VALUE && GetLastError() != ERROR_FILE_EXISTS) {
-		MBATTENTION(ET_CREATEFILE);
-		return;
-	}
-	if (hFile != INVALID_HANDLE_VALUE) {
-		CloseHandle(hFile);
-		return;
-	}
+void CheckFolderAndFile(const std::wstring& fileName) {
+    wchar_t appDataPath[MAX_PATH];
+    if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
+        MBATTENTION(ET_APPDATA);
+        return;
+    }
+    std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
+    if (!CreateDirectory(folderPath.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+        MBATTENTION(ET_CREATEFOLDER);
+        return;
+    }
+    std::wstring filePath = folderPath + fileName;
+    HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        if (GetLastError() != ERROR_FILE_EXISTS) {
+            MBATTENTION(ET_CREATEFILE);
+        }
+    } else {
+        CloseHandle(hFile);
+    }
 }
 std::wstring ReadSettingsFile() {
 	wchar_t appDataPath[MAX_PATH];
@@ -359,58 +358,80 @@ std::wstring ReadSettingsFile() {
 	CloseHandle(hFile);
 	return content;
 }
-void WriteSettingsFile(const std::wstring& content) {
-	wchar_t appDataPath[MAX_PATH];
-	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
-		MBATTENTION(ET_APPDATA);
-		return;
-	}
-	std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + FILEPATHNAME;
-	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hFile == INVALID_HANDLE_VALUE) {
-		MBATTENTION(ET_FILEOPEN);
-		return;
-	}
-	DWORD bytesWritten;
-	if (!WriteFile(hFile, content.c_str(), static_cast<DWORD>(content.length() * sizeof(wchar_t)), &bytesWritten, NULL)) {
-		MBATTENTION(ET_FILEWRITE);
-	}
-	CloseHandle(hFile);
+void WriteMyFile(std::wstring fileName, const std::wstring& content, bool isAdd) {
+    wchar_t appDataPath[MAX_PATH];
+    if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
+        MBATTENTION(ET_APPDATA);
+        return;
+    }
+    std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + fileName;
+    HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, isAdd ? OPEN_EXISTING : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        MBATTENTION(ET_FILEOPEN);
+        return;
+    }
+    if (isAdd) SetFilePointer(hFile, 0, NULL, FILE_END);
+    DWORD bytesWritten;
+    if (!WriteFile(hFile, content.c_str(), static_cast<DWORD>(content.length() * sizeof(wchar_t)), &bytesWritten, NULL))
+        MBATTENTION(ET_FILEWRITE);
+    CloseHandle(hFile);
 }
-std::wstring serializeToWstring(const HiddenWindow& s) {
+std::wstring serializeToWstring(const HiddenWindow& hw) {
 	std::wostringstream oss;
-	oss << s.windowTitle << L'|'
-		<< s.className << L'|'
-		<< s.processName << L'|'
-		<< s.comandLine << L'\n';
+	oss << hw.windowTitle << L'|'
+		<< hw.className << L'|'
+		<< hw.processName << L'|'
+		<< hw.comandLine << L'\n';
 	return oss.str();
 }
-BOOL CALLBACK EnumWindowsHWND(HWND hwnd, LPARAM lParam) {
-	HiddenWindow hw = *(HiddenWindow*)lParam;
-	hw.processID = GetProcessId(hwnd);
-	std::wstring processName = GetAllowedProcessName(hw.processID);
-	if (processName == L"") {
-		return TRUE;
+void FastSerchWindow(HiddenWindow& window) {
+	HWND hwnd = FindWindow(window.className.c_str(), window.windowTitle.c_str());
+	DWORD processId = GetProcessId(hwnd);
+	std::wstring processName = GetAllowedProcessName(processId);
+	if (processName == window.processName) {
+		window.hwnd = hwnd;
+		window.processID = processId;
 	}
-	if (processName == hw.processName) {
-		hw.hwnd = hwnd;
-		hw.processName = processName;
-		*(HiddenWindow*)lParam = hw;
-		return FALSE;
-	}
-	return TRUE;
 }
-void FindWindowFromFile(HiddenWindow& s, bool isFromFile) {
-	EnumWindows(EnumWindowsHWND, (LPARAM)&s);
-	if (isFromFile) s.isFavorite = SAVED_WINDOW;
-	if (s.hwnd && s.isFavorite == SAVED_WINDOW) {
-		wchar_t windowTitle[MAX_PATH];
-		ZeroMemory(&windowTitle, SIZEOF(windowTitle));
-		GetWindowTextW(s.hwnd, windowTitle, SIZEOF(windowTitle));
-		if (lstrcmpW(windowTitle, s.windowTitle.c_str()) == 0) {
-			s.isFavorite = true;
-			CollapseToTray(s.hwnd, &s);
-		}
+//BOOL CALLBACK EnumWindowsFindWindow(HWND hwnd, LPARAM lParam) {
+//	static std::vector<HWND> candidates;
+//	HiddenWindow& hw = *(HiddenWindow*)lParam;
+//	if (hw.hwnd == nullptr) {
+//		candidates.clear();
+//	}
+//	hw.processID = GetProcessId(hwnd);
+//	std::wstring processName = GetAllowedProcessName(hw.processID);
+//	if (processName.empty() || processName != hw.processName || hw.className != GetWstringClassName(hwnd)) {
+//		return TRUE;
+//	}
+//	std::wstring commandLine = GetProcessCommandLine(hw.processID);
+//	if (commandLine == hw.comandLine) {
+//		candidates.push_back(hwnd);
+//		if (candidates.size() > 1) {
+//			for (HWND candidateHwnd : candidates) {
+//				if (GetWindowTitle(candidateHwnd) == hw.windowTitle) {
+//					hw.hwnd = candidateHwnd;
+//					*(HiddenWindow*)lParam = hw;
+//					candidates.clear();
+//					return FALSE;
+//				}
+//			}
+//		} else {
+//			hw.hwnd = hwnd;
+//			*(HiddenWindow*)lParam = hw;
+//		}
+//	}
+//	return TRUE;
+//}
+void FindWindowFromFile(HiddenWindow& windowToFind, bool isFromFile) {
+	if (isFromFile) windowToFind.isFavorite = SAVED_WINDOW;
+	FastSerchWindow(windowToFind);
+	//if (!windowToFind.hwnd && windowToFind.isFavorite == SAVED_WINDOW) {
+	//	EnumWindows(EnumWindowsFindWindow, (LPARAM)&windowToFind);
+	//}
+	if (windowToFind.hwnd && windowToFind.isFavorite == SAVED_WINDOW) {
+		windowToFind.isFavorite = true;
+		CollapseToTray(windowToFind.hwnd, &windowToFind);
 	}
 }
 HiddenWindow deserializeOne(const std::wstring& str) {
@@ -436,13 +457,66 @@ void deserializeFromWstring(const std::wstring& str) {
 	while (std::getline(iss, line)) {
 		if (*line.c_str() != L'\0') {
 			result.push_back(deserializeOne(line));
-			line.clear();
 		}
 	}
 	favoriteWindows = result;
-	result.clear();
-	for (const auto& hw : favoriteWindows)
-		if (hw.isFavorite == TRUE)
-			result.push_back(hw);
-	hiddenWindows = result;
+}
+void RestartWithAdminRights() {
+	wchar_t szPath[MAX_PATH];
+	GetModuleFileName(NULL, szPath, MAX_PATH);
+	SHELLEXECUTEINFO sei = {0};
+	sei.cbSize = sizeof(sei);
+	sei.fMask = SEE_MASK_NOCLOSEPROCESS;
+	sei.hwnd = NULL;
+	sei.lpVerb = L"runas";
+	sei.lpFile = szPath;
+	sei.nShow = SW_SHOWNORMAL;
+	ShellExecuteEx(&sei);
+}
+std::wstring GetCurrentDate() {
+	std::wstringstream wss;
+	std::time_t t = std::time(nullptr);
+	std::tm tm;
+	localtime_s(&tm, &t);
+	wss << (tm.tm_year + 1900) << L'-'
+		<< (tm.tm_mon + 1) << L'-'
+		<< tm.tm_mday;
+	return wss.str();
+}
+void CheckAndDeleteOldLogs(const std::wstring& currentLogFile) {
+	wchar_t appDataPath[MAX_PATH];
+	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
+		MBATTENTION(ET_APPDATA);
+		return;
+	}
+	std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
+	std::vector<std::pair<std::wstring, FILETIME>> logFiles;
+	WIN32_FIND_DATA findFileData;
+	HANDLE hFind = FindFirstFile((folderPath + L"\\*.log").c_str(), &findFileData);
+	if (hFind == INVALID_HANDLE_VALUE) return;
+	do {
+		if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && findFileData.cFileName != currentLogFile)
+			logFiles.push_back({findFileData.cFileName, findFileData.ftLastWriteTime});
+	} while (FindNextFile(hFind, &findFileData) != 0);
+	FindClose(hFind);
+	if (logFiles.size() > 7) {
+		auto oldestFile = std::min_element(logFiles.begin(), logFiles.end(), [](const auto& a, const auto& b) {return CompareFileTime(&a.second, &b.second) < 0; });
+		if (oldestFile != logFiles.end())
+			DeleteFile((folderPath + L"\\" + oldestFile->first).c_str());
+	}
+}
+std::wstring GetTime() {
+	std::wstringstream wss;
+	std::time_t t = std::time(nullptr);
+	std::tm tm;
+	localtime_s(&tm, &t);
+	wss << std::setw(2) << std::setfill(L'0') << tm.tm_hour << L':'
+		<< std::setw(2) << std::setfill(L'0') << tm.tm_min << L':'
+		<< std::setw(2) << std::setfill(L'0') << tm.tm_sec;
+	return wss.str();
+}
+void LogAdd(std::wstring&& content) {
+	std::wstring currentLogFile = L"\\" + GetCurrentDate() + L".log";
+	CheckFolderAndFile(currentLogFile);
+	WriteMyFile(currentLogFile, L"[" + GetTime() + L"]\t" + content + L"\n", true);
 }
