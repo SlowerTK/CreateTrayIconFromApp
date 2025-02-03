@@ -3,13 +3,13 @@
 std::vector<HiddenWindow> hiddenWindows = {};
 std::vector<HiddenWindow> favoriteWindows = {};
 ProgramVariable pv = {0};
-WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
+WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc, COLORREF color) {
 	WNDCLASS wc;
 	ZeroMemory(&wc, sizeof(wc));
 	wc.lpszClassName = className;
 	wc.hInstance = pv.hInstance;
 	wc.lpfnWndProc = wndproc;
-	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW);
+	wc.hbrBackground = (HBRUSH)(CreateSolidBrush(color));
 	wc.hCursor = (HCURSOR)LoadImage(NULL, IDC_ARROW, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
 	RegisterClass(&wc);
 	return wc;
@@ -40,7 +40,7 @@ void DebugModCheck(wchar_t* lpCmdLine) {
 }
 void OpenSettings() {
 	if (!pv.settWin)
-		pv.settWin = CreateWindowExW(WS_EX_TOPMOST, pv.wc2.lpszClassName, pv.isAdminMode ? pv.wc2.lpszClassName : WND_TITLE, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
+		pv.settWin = CreateWindowExW(NULL, pv.wc2.lpszClassName, pv.isAdminMode ? pv.wc2.lpszClassName : WND_TITLE, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
 									 (GetSystemMetrics(SM_CXSCREEN) - wndX) >> 1, (GetSystemMetrics(SM_CYSCREEN) - wndY) >> 1, wndX, wndY, 0, 0, pv.hInstance, 0);
 	else SetForegroundWindow(pv.settWin);
 }
@@ -69,7 +69,7 @@ void UpdateTrayMenu(bool isDebug) {
 			it = hiddenWindows.erase(it);
 			continue;
 		}
-		UINT id = static_cast<UINT>(1000) + std::distance(hiddenWindows.begin(), it);
+		UINT id = static_cast<UINT>(1000) + static_cast<UINT>(std::distance(hiddenWindows.begin(), it));
 		AppendMenu(pv.hMenu, MF_STRING, id, (pv.isDebugMode || isDebug) ? it->processName.c_str() : it->windowTitle.c_str());
 		HBITMAP hBitmap = IconToBitmap(it->hIcon);
 		if (hBitmap) SetMenuItemBitmaps(pv.hMenu, id, MF_BYCOMMAND, hBitmap, hBitmap);
@@ -154,12 +154,13 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 		if (SUCCEEDED(hres) && vtProp.vt == VT_BSTR) {
 			commandLine = vtProp.bstrVal;
 		} else {
-			commandLine = ET_COMMANDLINE;
+			LogAdd(ET_COMMANDLINE);
+			commandLine = L"";
 		}
 		VariantClear(&vtProp);
 		pClsObj->Release();
 	} else {
-		commandLine = ET_COMMANDLINE_PROC;
+		commandLine = L"";
 	}
 
 	pEnumerator->Release();
@@ -167,7 +168,7 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 	pLoc->Release();
 	CoUninitialize();
 
-	return commandLine.empty() ? ET_ARGLOST : commandLine;
+	return commandLine;
 }
 BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
 	HWND hApplicationsList = (HWND)lParam;
@@ -230,7 +231,7 @@ HICON GetIcon(HWND hwnd) {
 }
 std::wstring GetWindowTitle(HWND hwnd) {
 	wchar_t windowTitle[MAX_PATH];
-	ZeroMemory(&windowTitle, SIZEOF(windowTitle));
+	ZeroMemory(&windowTitle, sizeof(windowTitle));
 	GetWindowTextW(hwnd, windowTitle, SIZEOF(windowTitle));
 	return windowTitle;
 }
@@ -258,13 +259,17 @@ void CollapseToTrayFromFavorite() {
 	for (int i = 0; i < count; ++i) {
 		HiddenWindow* HW = reinterpret_cast<HiddenWindow*>(SendMessage(pv.hFavoritesList, LB_GETITEMDATA, i, 0));
 
-		if (HW->isFavorite == TRUE && std::none_of(hiddenWindows.begin(), hiddenWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; })) {
-			HW->comandLine = GetProcessCommandLine(HW->processID);
-			if (std::none_of(favoriteWindows.begin(), favoriteWindows.end(), [HW](const HiddenWindow& hw) { return hw.processID == HW->processID; })){
-				favoriteWindows.push_back(*HW);
-				LogAdd(L"В изброное добавлено " + *HW->className.c_str());
+		if (HW->isFavorite == TRUE && std::none_of(hiddenWindows.begin(), hiddenWindows.end(), [HW](const HiddenWindow& hw) { return hw.hwnd == HW->hwnd; })) {
+			std::wstring commandLine = GetProcessCommandLine(HW->processID);
+			if (!commandLine.empty()) {
+				HW->commandLine = std::move(commandLine);
+				if (std::none_of(favoriteWindows.begin(), favoriteWindows.end(), [HW](const HiddenWindow& hw) { return hw.commandLine == HW->commandLine && hw.hwnd == HW->hwnd; })) {
+					favoriteWindows.push_back(*HW);
+					std::wstring appTittle = HW->windowTitle.c_str();
+					LogAdd(L"В избранное добавлено " + appTittle);
+				}
+				CollapseToTray(HW->hwnd, HW);
 			}
-			CollapseToTray(HW->hwnd, HW);
 		}
 	}
 }
@@ -280,7 +285,7 @@ void DeleteList(HWND list) {
 }
 std::wstring GetWstringClassName(HWND hwnd) {
 	wchar_t classNam[256];
-	ZeroMemory(&classNam, SIZEOF(classNam));
+	ZeroMemory(&classNam, sizeof(classNam));
 	GetClassNameW(hwnd, classNam, SIZEOF(classNam));
 	if (lstrcmpW(classNam, pv.wc2.lpszClassName) == 0)
 		return L"";
@@ -381,54 +386,24 @@ std::wstring serializeToWstring(const HiddenWindow& hw) {
 	oss << hw.windowTitle << L'|'
 		<< hw.className << L'|'
 		<< hw.processName << L'|'
-		<< hw.comandLine << L'\n';
+		<< hw.commandLine << L'\n';
 	return oss.str();
 }
-void FastSerchWindow(HiddenWindow& window) {
+void SerchWindow(HiddenWindow& window) {
 	HWND hwnd = FindWindow(window.className.c_str(), window.windowTitle.c_str());
 	DWORD processId = GetProcessId(hwnd);
 	std::wstring processName = GetAllowedProcessName(processId);
 	if (processName == window.processName) {
-		window.hwnd = hwnd;
-		window.processID = processId;
+		std::wstring commandLine = GetProcessCommandLine(processId);
+		if (commandLine == window.commandLine) {
+			window.hwnd = hwnd;
+			window.processID = processId;
+		}
 	}
 }
-//BOOL CALLBACK EnumWindowsFindWindow(HWND hwnd, LPARAM lParam) {
-//	static std::vector<HWND> candidates;
-//	HiddenWindow& hw = *(HiddenWindow*)lParam;
-//	if (hw.hwnd == nullptr) {
-//		candidates.clear();
-//	}
-//	hw.processID = GetProcessId(hwnd);
-//	std::wstring processName = GetAllowedProcessName(hw.processID);
-//	if (processName.empty() || processName != hw.processName || hw.className != GetWstringClassName(hwnd)) {
-//		return TRUE;
-//	}
-//	std::wstring commandLine = GetProcessCommandLine(hw.processID);
-//	if (commandLine == hw.comandLine) {
-//		candidates.push_back(hwnd);
-//		if (candidates.size() > 1) {
-//			for (HWND candidateHwnd : candidates) {
-//				if (GetWindowTitle(candidateHwnd) == hw.windowTitle) {
-//					hw.hwnd = candidateHwnd;
-//					*(HiddenWindow*)lParam = hw;
-//					candidates.clear();
-//					return FALSE;
-//				}
-//			}
-//		} else {
-//			hw.hwnd = hwnd;
-//			*(HiddenWindow*)lParam = hw;
-//		}
-//	}
-//	return TRUE;
-//}
 void FindWindowFromFile(HiddenWindow& windowToFind, bool isFromFile) {
 	if (isFromFile) windowToFind.isFavorite = SAVED_WINDOW;
-	FastSerchWindow(windowToFind);
-	//if (!windowToFind.hwnd && windowToFind.isFavorite == SAVED_WINDOW) {
-	//	EnumWindows(EnumWindowsFindWindow, (LPARAM)&windowToFind);
-	//}
+	SerchWindow(windowToFind);
 	if (windowToFind.hwnd && windowToFind.isFavorite == SAVED_WINDOW) {
 		windowToFind.isFavorite = true;
 		CollapseToTray(windowToFind.hwnd, &windowToFind);
@@ -445,7 +420,7 @@ HiddenWindow deserializeOne(const std::wstring& str) {
 	std::getline(iss, token, L'|');
 	s.processName = token;
 	std::getline(iss, token, L'\n');
-	s.comandLine = token;
+	s.commandLine = token;
 	FindWindowFromFile(s, true);
 	return s;
 }
@@ -519,4 +494,206 @@ void LogAdd(std::wstring&& content) {
 	std::wstring currentLogFile = L"\\" + GetCurrentDate() + L".log";
 	CheckFolderAndFile(currentLogFile);
 	WriteMyFile(currentLogFile, L"[" + GetTime() + L"]\t" + content + L"\n", true);
+}
+bool InitializeTaskService(CComPtr<ITaskService>& pService) {
+	HRESULT hr = pService.CoCreateInstance(CLSID_TaskScheduler, NULL, CLSCTX_INPROC_SERVER);
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось создать экземпляр TaskService: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+		return false;
+	}
+
+	hr = pService->Connect(_variant_t(), _variant_t(), _variant_t(), _variant_t());
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось подключиться к TaskScheduler: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+		return false;
+	}
+	return true;
+}
+bool GetRootFolder(CComPtr<ITaskService>& pService, CComPtr<ITaskFolder>& pRootFolder) {
+	HRESULT hr = pService->GetFolder(_bstr_t(L"\\"), &pRootFolder);
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось получить доступ к корневой папке: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+		return false;
+	}
+	return true;
+}
+bool IsTaskScheduled(const std::wstring& taskName) {
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось выполнить CoInitializeEx: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+		return false;
+	}
+
+	CComPtr<ITaskService> pService;
+	if (!InitializeTaskService(pService)) {
+		LogAdd(L"Не удалось выполнить InitializeTaskService");
+		CoUninitialize();
+		return false;
+	}
+
+	CComPtr<ITaskFolder> pRootFolder;
+	if (!GetRootFolder(pService, pRootFolder)) {
+		LogAdd(L"Не удалось выполнить GetRootFolder");
+		CoUninitialize();
+		return false;
+	}
+
+	if (!pRootFolder) {
+		LogAdd(L"pRootFolder == NULL");
+		CoUninitialize();
+		return false;
+	}
+
+	CComPtr<IRegisteredTask> pTask = nullptr;
+	hr = pRootFolder->GetTask(_bstr_t(taskName.c_str()), &pTask);
+
+	bool result = SUCCEEDED(hr) && pTask != nullptr;
+	pTask.Release();
+	pRootFolder.Release();
+	pService.Release();
+	CoUninitialize();
+	return result;
+}
+void DeleteScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName) {
+	CComPtr<ITaskFolder> pRootFolder;
+	if (!GetRootFolder(pService, pRootFolder)) {
+		return;
+	}
+	HRESULT hr = pRootFolder->DeleteTask(_bstr_t(taskName.c_str()), 0);
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось удалить задачу: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+	} else {
+		LogAdd(L"Задача успешно удалена!");
+	}
+}
+void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName, const std::wstring& exePath) {
+	CComPtr<ITaskFolder> pRootFolder;
+	if (!GetRootFolder(pService, pRootFolder)) {
+		return;
+	}
+	pRootFolder->DeleteTask(_bstr_t(taskName.c_str()), 0);
+
+	CComPtr<ITaskDefinition> pTask;
+	HRESULT hr = pService->NewTask(0, &pTask);
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось создать новую задачу: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+		return;
+	}
+
+	CComPtr<IRegistrationInfo> pRegInfo;
+	pTask->get_RegistrationInfo(&pRegInfo);
+	pRegInfo->put_Author(const_cast<BSTR>(L"Admin"));
+
+	CComPtr<IPrincipal> pPrincipal;
+	pTask->get_Principal(&pPrincipal);
+	pPrincipal->put_LogonType(TASK_LOGON_INTERACTIVE_TOKEN);
+	pPrincipal->put_RunLevel(TASK_RUNLEVEL_HIGHEST);
+
+	CComPtr<ITriggerCollection> pTriggerCollection;
+	pTask->get_Triggers(&pTriggerCollection);
+	CComPtr<ITrigger> pTrigger;
+	pTriggerCollection->Create(TASK_TRIGGER_LOGON, &pTrigger);
+
+	CComPtr<IActionCollection> pActionCollection;
+	pTask->get_Actions(&pActionCollection);
+	CComPtr<IAction> pAction;
+	pActionCollection->Create(TASK_ACTION_EXEC, &pAction);
+
+	CComPtr<IExecAction> pExecAction;
+	pAction->QueryInterface(IID_IExecAction, (void**)&pExecAction);
+	pExecAction->put_Path(_bstr_t(exePath.c_str()));
+
+	CComPtr<ITaskSettings> pSettings;
+	pTask->get_Settings(&pSettings);
+	pSettings->put_DisallowStartIfOnBatteries(VARIANT_FALSE);
+	pSettings->put_StopIfGoingOnBatteries(VARIANT_FALSE);
+	pSettings->put_AllowHardTerminate(VARIANT_FALSE);
+	pSettings->put_ExecutionTimeLimit(_bstr_t(L"PT0S"));
+
+	CComPtr<IRegisteredTask> pRegisteredTask;
+	hr = pRootFolder->RegisterTaskDefinition(
+		_bstr_t(taskName.c_str()), pTask, TASK_CREATE_OR_UPDATE,
+		_variant_t(L""), _variant_t(L""), TASK_LOGON_INTERACTIVE_TOKEN, _variant_t(L""), &pRegisteredTask
+	);
+
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось зарегистрировать задачу: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+	} else {
+		LogAdd(L"Задача успешно зарегистрирована!");
+	}
+}
+void StartupChanging(bool isAdd) {
+	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
+	if (FAILED(hr)) {
+		wchar_t buf[64];
+		swprintf_s(buf, L"Не удалось выполнить CoInitializeEx: 0x%08X", static_cast<UINT>(hr));
+		LogAdd(buf);
+		return;
+	}
+
+	CComPtr<ITaskService> pService;
+	if (!InitializeTaskService(pService)) {
+		CoUninitialize();
+		return;
+	}
+
+	wchar_t szPath[MAX_PATH];
+	GetModuleFileName(NULL, szPath, MAX_PATH);
+	std::wstring appPath = szPath;
+	if (isAdd) {
+		CreateScheduledTask(pService, appName, appPath);
+	} else {
+		DeleteScheduledTask(pService, appName);
+	}
+
+	pService.Release();
+	CoUninitialize();
+}
+void CreateTimerSettWnd() {
+    if (!pv.settTimer) {
+        RECT rect;
+        GetWindowRect(pv.settWin, &rect);
+		int cx = 740;
+		int cy = 290;
+        int x = rect.left + ((rect.right-rect.left)>>1) - (cx>>1);
+        int y = rect.top+ ((rect.bottom - rect.top) >> 1) - (cy >> 1);
+        pv.settTimer = CreateWindowExW(NULL, pv.wc3.lpszClassName, L"Время таймера в миллисекундах", WS_OVERLAPPED | WS_CAPTION | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
+    } else {
+        SetForegroundWindow(pv.settTimer);
+    }
+}
+void LoadNumberFromRegistry() {
+	HKEY hKey;
+	DWORD size = sizeof(pv.timerToHide);
+	pv.timerToHide = SECOND;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+		if (RegQueryValueExW(hKey, KEY, NULL, NULL, (BYTE*)&pv.timerToHide, &size) != ERROR_SUCCESS) {
+			LogAdd(L"Значение отсутствует, используем стандартное: " + std::to_wstring(pv.timerToHide));
+		}
+		RegCloseKey(hKey);
+	} else {
+		LogAdd(L"Ключ не найден, используем стандартное: " + std::to_wstring(pv.timerToHide));
+	}
+}
+void SaveNumberToRegistry() {
+	HKEY hKey;
+	if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+		RegSetValueExW(hKey, KEY, 0, REG_DWORD, (BYTE*)&pv.timerToHide, sizeof(pv.timerToHide));
+		RegCloseKey(hKey);
+		LogAdd(L"Записано новое значение таймера: " + std::to_wstring(pv.timerToHide));
+	}
 }

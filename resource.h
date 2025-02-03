@@ -9,26 +9,27 @@
 //
 //
 //
+// 
+constexpr auto appName = L"CTIFA";
 //File strings
 constexpr auto FILEPATHNAME = L"\\settings";
 constexpr auto FOLDERNAME = L"\\CTIFA";
+constexpr auto REG_PATH = L"Software\\CTIFA";
 //Warning texts
 constexpr auto WT_ADMIN = L"Для корректной работы программы рекомендуется запускать её с правами Администратора";
 //Error texts
 constexpr auto ET_HOTKEY = L"Не удалось зарегистрировать горячие клавиши";
 constexpr auto ET_APPDATA = L"Не удалось определить путь к AppData";
 constexpr auto ET_CREATEFOLDER = L"Не удалось создать папку";
-constexpr auto ET_CREATEFILE = L"Не удалось созадть файл";
+constexpr auto ET_CREATEFILE = L"Не удалось создать файл";
 constexpr auto ET_FILEOPEN = L"Не удалось открыть файл";
 constexpr auto ET_FILESIZE = L"Не удалось определить размер файла";
 constexpr auto ET_FILECONTENT = L"Не удалось считать файл";
 constexpr auto ET_FILEWRITE = L"Не удалось добавить запись в файл";
 constexpr auto ET_COMMANDLINE = L"Не удалось получить строку запуска";
-constexpr auto ET_COMMANDLINE_PROC = L"Не удалось найти процесс";
-constexpr auto ET_ARGLOST = L"Аргументы отсутствуют";
 //Some texts
 constexpr auto NEED_ADMIN_RIGHTS = L"Перезапустить от имени администратора";
-constexpr auto WND_TITLE = L"Для отображения всех окон нужны права администратора";
+constexpr auto WND_TITLE = L"Для корректной работы нужны права администратора";
 constexpr auto SZ_TIP = L"Скрытые окна";
 constexpr auto WND_NAME_TEXT = L"Все приложения:";
 constexpr auto WND_NAME_TEXT2 = L"Будут скрываться автоматически:";
@@ -43,6 +44,7 @@ constexpr auto TB_SETTINGS_TEXT = L"Авто. скрытие";
 constexpr auto TB_EXIT_TEXT = L"Выход";
 constexpr auto TB_HOTKEY_TEXT = L"Ctrl + Alt + H";
 constexpr auto QUERY = L"SELECT CommandLine FROM Win32_Process WHERE ProcessId = ";
+constexpr auto KEY = L"TimerNumber";
 //
 constexpr auto SECOND = 5'000;
 //
@@ -70,6 +72,8 @@ constexpr auto SECOND = 5'000;
 #define ID_BUTTON_RELOAD     15
 #define ID_AUTOSTART         1001
 #define ID_TIME_AUTOHIDE     1002
+#define ID_OK_BUTTON		 11
+#define ID_EDIT_FIELD		 12
 
 // Next default values for new objects
 // 
