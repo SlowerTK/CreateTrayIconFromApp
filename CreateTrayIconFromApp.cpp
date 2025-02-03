@@ -120,6 +120,7 @@ static LRESULT CALLBACK TimerSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARA
 	return 0;
 }
 
+
 static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	static unsigned int prevValue;
 	static HFONT hFont = NULL;

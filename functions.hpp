@@ -2,7 +2,6 @@
 #include <string>
 #include <vector>
 #include <windows.h>
-#include <unordered_map>
 #include "resource.h"
 #include <algorithm>
 #include <comdef.h>
@@ -18,7 +17,6 @@
 #include <atlbase.h>
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "comsupp.lib")
-
 struct ProgramVariable {
 	HWND settWin, settTimer;
 	WNDCLASS wc1, wc2, wc3;
@@ -42,6 +40,7 @@ struct HiddenWindow {
 };
 extern std::vector<HiddenWindow> hiddenWindows;
 extern std::vector<HiddenWindow> favoriteWindows;
+
 
 extern ProgramVariable pv;
 

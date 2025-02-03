@@ -167,7 +167,6 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 	pSvc->Release();
 	pLoc->Release();
 	CoUninitialize();
-
 	return commandLine;
 }
 BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
@@ -432,6 +431,7 @@ void deserializeFromWstring(const std::wstring& str) {
 	while (std::getline(iss, line)) {
 		if (*line.c_str() != L'\0') {
 			result.push_back(deserializeOne(line));
+			line.clear();
 		}
 	}
 	favoriteWindows = result;
