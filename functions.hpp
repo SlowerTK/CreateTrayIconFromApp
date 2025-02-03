@@ -9,16 +9,24 @@
 #include <Psapi.h>
 #include <ShlObj.h>
 #include <sstream>
+#include <iomanip>
 #pragma comment(lib, "wbemuuid.lib")
 
-extern bool isDebugMode;
+#include <taskschd.h>
+#include <comdef.h>
+#include <atlbase.h>
+#pragma comment(lib, "taskschd.lib")
+#pragma comment(lib, "comsupp.lib")
 struct ProgramVariable {
-	HWND settWin;
-	WNDCLASS wc1, wc2;
+	HWND settWin, settTimer;
+	WNDCLASS wc1, wc2, wc3;
 	HINSTANCE hInstance;
-	HMENU hMenu;
+	HMENU hMenu, hSettMenu, hSettSubMenu;
 	HWND hApplicationsList, hFavoritesList, hAddButton, hRemoveButton, hText, hReloadButton;
+	HANDLE hMutex;
 	UINT WM_TASKBAR_CREATED;
+	unsigned int timerToHide;
+	bool isDebugMode, isAdminMode;
 };
 struct HiddenWindow {
 	HWND hwnd = 0;
@@ -28,18 +36,11 @@ struct HiddenWindow {
 	std::wstring windowTitle;
 	std::wstring className;
 	std::wstring processName;
-	std::wstring comandLine;
-};
-
-struct FullscreenBorderlessWindow {
-	HWND hwnd;
-	DWORD dwStyle;
-	DWORD dwExStyle;
-	RECT rect;
+	std::wstring commandLine;
 };
 extern std::vector<HiddenWindow> hiddenWindows;
 extern std::vector<HiddenWindow> favoriteWindows;
-extern std::vector<FullscreenBorderlessWindow> fullscreenBorderlessWindows;
+
 
 extern ProgramVariable pv;
 
@@ -67,7 +68,7 @@ static std::wstring exceptionProcessNames[] = {
 			//L"Xaml_WindowedPopupClass" //Предпросмотр окна
 };
 
-WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc);
+WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc, COLORREF color);
 bool isRunAsAdmin();
 void DebugModCheck(wchar_t* lpCmdLine);
 static HBITMAP IconToBitmap(HICON hIcon);
@@ -82,9 +83,24 @@ void DeleteList(HWND list);
 std::wstring GetWstringClassName(HWND hwnd);
 DWORD GetProcessId(HWND hwnd);
 std::wstring GetAllowedProcessName(DWORD processID);
-void CheckFolderAndFile();
+void CheckFolderAndFile(const std::wstring& fileName);
 std::wstring ReadSettingsFile();
-std::wstring serializeToWstring(const HiddenWindow& s);
+std::wstring serializeToWstring(const HiddenWindow& hw);
 void deserializeFromWstring(const std::wstring& str);
-void WriteSettingsFile(const std::wstring& content);
-void FindWindowFromFile(HiddenWindow& s, bool isFile);
+void WriteMyFile(std::wstring fileName, const std::wstring& content, bool isAdd = false);
+void FindWindowFromFile(HiddenWindow& windowToFind, bool isFile);
+std::wstring GetWindowTitle(HWND hwnd);
+void SerchWindow(HiddenWindow& window);
+void RestartWithAdminRights();
+std::wstring GetCurrentDate();
+void LogAdd(std::wstring&& content);
+void CheckAndDeleteOldLogs(const std::wstring& currentLogFile);
+bool InitializeTaskService(CComPtr<ITaskService>& pService);
+bool GetRootFolder(CComPtr<ITaskService>& pService, CComPtr<ITaskFolder>& pRootFolder);
+bool IsTaskScheduled(const std::wstring& taskName);
+void DeleteScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName);
+void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName, const std::wstring& exePath);
+void StartupChanging(bool isAdd);
+void CreateTimerSettWnd();
+void LoadNumberFromRegistry();
+void SaveNumberToRegistry();
