@@ -36,21 +36,31 @@ constexpr auto WND_NAME_TEXT2 = L"Будут скрываться автомат
 constexpr auto ADDBUTTON_TEXT = L"▶";
 constexpr auto REMOVEBUTTON_TEXT = L"◀";
 constexpr auto RELOADBUTTON_TEXT = L"↻";
+constexpr auto STARTUP_TEXT = L"Запускать вместе с windows?";
+constexpr auto HINT_TEXT = L"❓";
+constexpr auto CHECKBOX_TEXT = L"Скрывать восстановленные избранные?";
+constexpr auto EDITBOX_TEXT = L"Через сколько скрывать восстановленное окно?(мс)";
+constexpr auto HOTKEY_TEXT = L"Текущие сочетание клавиш для скрытия активного окна";
+constexpr auto HOTKEYBUTTON_TEXT = L"Изменить";
 constexpr auto BUTTON = L"BUTTON";
 constexpr auto LISTBOX = L"LISTBOX";
 constexpr auto STATIC = L"STATIC";
+constexpr auto EDIT = L"EDIT";
 constexpr auto DEBUG_STRING = L"-debug";
 constexpr auto TB_SETTINGS_TEXT = L"Авто. скрытие";
 constexpr auto TB_EXIT_TEXT = L"Выход";
 constexpr auto TB_HOTKEY_TEXT = L"Ctrl + Alt + H";
 constexpr auto QUERY = L"SELECT CommandLine FROM Win32_Process WHERE ProcessId = ";
-constexpr auto KEY = L"TimerNumber";
+constexpr auto KEY1 = L"isTimer";
+constexpr auto KEY2 = L"TimerNumber";
+constexpr auto HINT_MSG = L"Если пункт «Скрывать восстановленные избранные» выключен, то избранные окна будут скрываться только при создании. Если нужно восстановить только одно окно, чтоб оно не скрывалось, можно при выборе окна зажать клавишу `Shift`. \nИначе восстановленное окно будет скрыто через выбранное количество миллисекунд.";
+constexpr auto PRESSKEYS = L"Нажмите клавиши";
 //
 constexpr auto SECOND = 5'000;
 //
 //defines
 
-#define POINT2CORD(point) point.left, point.top, point.right - point.left, point.bottom - point.top
+#define RECT2CORD(rect) rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
 #define SIZEOF(str) (sizeof(str) / sizeof(str[0]))
 #define MBATTENTION(str) MessageBox(NULL, str, L"Внимание!", MB_ICONWARNING)
 #define MBERROR(str) MessageBox(NULL, str, L"Ошибка!", MB_ICONERROR)
@@ -61,19 +71,23 @@ constexpr auto SECOND = 5'000;
 #define TB_EXIT 2
 #define TB_RESTART 3
 #define TRAY_ICON_MESSAGE (WM_USER + 1)
-#define wndX 1000
+#define wndX 1200
 #define wndY 375
 #define SAVED_WINDOW 2
 #define TIMED_WINDOW 3
-#define ID_LIST_APPLICATIONS 11
-#define ID_LIST_FAVORITES    12
-#define ID_BUTTON_ADD        13
-#define ID_BUTTON_REMOVE     14
-#define ID_BUTTON_RELOAD     15
-#define ID_AUTOSTART         1001
-#define ID_TIME_AUTOHIDE     1002
-#define ID_OK_BUTTON		 11
-#define ID_EDIT_FIELD		 12
+#define ID_LIST_APPLICATIONS       11
+#define ID_LIST_FAVORITES          12
+#define ID_BUTTON_ADD              13
+#define ID_BUTTON_REMOVE           14
+#define ID_BUTTON_RELOAD           15
+#define ID_BUTTON_AUTOSTART        16
+#define ID_BUTTON_TIMEAUTOHIDE     17
+#define ID_BUTTON_HINT			   18
+#define ID_EDIT_FIELD		       19
+#define ID_BUTTON_HK		       20
+#define ID_OK_BUTTON			101
+#define ID_RESET_BUTTON			102
+#define ID_CANCEL_BUTTON		103
 
 // Next default values for new objects
 // 

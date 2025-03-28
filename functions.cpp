@@ -3,13 +3,13 @@
 std::vector<HiddenWindow> hiddenWindows = {};
 std::vector<HiddenWindow> favoriteWindows = {};
 ProgramVariable pv = {0};
-WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc, COLORREF color) {
+WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
 	WNDCLASS wc;
 	ZeroMemory(&wc, sizeof(wc));
 	wc.lpszClassName = className;
 	wc.hInstance = pv.hInstance;
 	wc.lpfnWndProc = wndproc;
-	wc.hbrBackground = (HBRUSH)(CreateSolidBrush(color));
+	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wc.hCursor = (HCURSOR)LoadImage(NULL, IDC_ARROW, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
 	RegisterClass(&wc);
 	return wc;
@@ -287,8 +287,10 @@ std::wstring GetWstringClassName(HWND hwnd) {
 	wchar_t classNam[256];
 	ZeroMemory(&classNam, sizeof(classNam));
 	GetClassNameW(hwnd, classNam, SIZEOF(classNam));
-	if (lstrcmpW(classNam, pv.wc2.lpszClassName) == 0)
-		return L"";
+	for (const auto& t : exceptionClassNames) {
+		if (lstrcmpW(classNam, t.c_str()) == 0)
+			return L"";
+	}
 	return classNam;
 }
 DWORD GetProcessId(HWND hwnd) {
@@ -315,8 +317,8 @@ std::wstring GetAllowedProcessName(DWORD processID) {
 	return processName;
 }
 void CheckFolderAndFile(const std::wstring& fileName) {
-    wchar_t appDataPath[MAX_PATH];
-    if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
+    PWSTR appDataPath;
+	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
         MBATTENTION(ET_APPDATA);
         return;
     }
@@ -336,8 +338,8 @@ void CheckFolderAndFile(const std::wstring& fileName) {
     }
 }
 std::wstring ReadSettingsFile() {
-	wchar_t appDataPath[MAX_PATH];
-	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
+	PWSTR appDataPath;
+	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
 		MBATTENTION(ET_APPDATA);
 		return L"";
 	}
@@ -364,11 +366,11 @@ std::wstring ReadSettingsFile() {
 	return content;
 }
 void WriteMyFile(std::wstring fileName, const std::wstring& content, bool isAdd) {
-    wchar_t appDataPath[MAX_PATH];
-    if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
-        MBATTENTION(ET_APPDATA);
-        return;
-    }
+	PWSTR appDataPath;
+	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
+		MBATTENTION(ET_APPDATA);
+		return;
+	}
     std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + fileName;
     HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, isAdd ? OPEN_EXISTING : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
@@ -459,8 +461,8 @@ std::wstring GetCurrentDate() {
 	return wss.str();
 }
 void CheckAndDeleteOldLogs(const std::wstring& currentLogFile) {
-	wchar_t appDataPath[MAX_PATH];
-	if (FAILED(SHGetFolderPath(NULL, CSIDL_APPDATA, NULL, NULL, appDataPath))) {
+	PWSTR appDataPath;
+	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
 		MBATTENTION(ET_APPDATA);
 		return;
 	}
@@ -663,37 +665,135 @@ void StartupChanging(bool isAdd) {
 	pService.Release();
 	CoUninitialize();
 }
-void CreateTimerSettWnd() {
-    if (!pv.settTimer) {
+void CreateHKSettWnd() {
+    if (!pv.settHK) {
         RECT rect;
         GetWindowRect(pv.settWin, &rect);
-		int cx = 740;
-		int cy = 290;
-        int x = rect.left + ((rect.right-rect.left)>>1) - (cx>>1);
-        int y = rect.top+ ((rect.bottom - rect.top) >> 1) - (cy >> 1);
-        pv.settTimer = CreateWindowExW(NULL, pv.wc3.lpszClassName, L"Время таймера в миллисекундах", WS_OVERLAPPED | WS_CAPTION | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
-    } else {
-        SetForegroundWindow(pv.settTimer);
-    }
+		int cx = 600;
+		int cy = 300;
+		int x = rect.left + ((rect.right - rect.left) >> 1) - (cx >> 1);
+        int y = rect.top + ((rect.bottom - rect.top) >> 1) - (cy >> 1);
+		pv.settHK = CreateWindowExW(NULL, pv.wc3.lpszClassName, L"Введите новое сочетание клавиш", WS_CHILD | WS_POPUP | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
+	}
 }
 void LoadNumberFromRegistry() {
 	HKEY hKey;
-	DWORD size = sizeof(pv.timerToHide);
+	DWORD size1 = sizeof(pv.isHideOn);
+	DWORD size2 = sizeof(pv.timerToHide);
+	pv.isHideOn = true;
 	pv.timerToHide = SECOND;
 	if (RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-		if (RegQueryValueExW(hKey, KEY, NULL, NULL, (BYTE*)&pv.timerToHide, &size) != ERROR_SUCCESS) {
+		if (RegQueryValueExW(hKey, KEY1, NULL, NULL, (BYTE*)&pv.isHideOn, &size1) != ERROR_SUCCESS) {
+			LogAdd(L"Значение отсутствует, используем стандартное: " + std::to_wstring(pv.isHideOn));
+			RegSetValueExW(hKey, KEY1, NULL, REG_DWORD, (BYTE*)&pv.isHideOn, sizeof(pv.isHideOn));
+		}
+		if (RegQueryValueExW(hKey, KEY2, NULL, NULL, (BYTE*)&pv.timerToHide, &size2) != ERROR_SUCCESS) {
 			LogAdd(L"Значение отсутствует, используем стандартное: " + std::to_wstring(pv.timerToHide));
+			RegSetValueExW(hKey, KEY2, NULL, REG_DWORD, (BYTE*)&pv.timerToHide, sizeof(pv.timerToHide));
 		}
 		RegCloseKey(hKey);
 	} else {
-		LogAdd(L"Ключ не найден, используем стандартное: " + std::to_wstring(pv.timerToHide));
+		LogAdd(L"Ключ не найден, используем стандартные настройки");
 	}
 }
-void SaveNumberToRegistry() {
+void SaveToRegistry(bool a, bool b) {
 	HKEY hKey;
 	if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-		RegSetValueExW(hKey, KEY, 0, REG_DWORD, (BYTE*)&pv.timerToHide, sizeof(pv.timerToHide));
+		if (a) {
+			RegSetValueExW(hKey, KEY1, NULL, REG_DWORD, (BYTE*)&pv.isHideOn, sizeof(pv.isHideOn));
+			LogAdd(std::wstring(L"Таймер ") + ((pv.isHideOn) ? L"включён" : L"выключен"));
+		}
+		if (b) {
+			RegSetValueExW(hKey, KEY2, NULL, REG_DWORD, (BYTE*)&pv.timerToHide, sizeof(pv.timerToHide));
+			LogAdd(L"Записано значение таймера: " + std::to_wstring(pv.timerToHide));
+		}
 		RegCloseKey(hKey);
-		LogAdd(L"Записано новое значение таймера: " + std::to_wstring(pv.timerToHide));
 	}
+}
+void SetZeroModKeysState() {
+	BYTE keyState[256];
+	if (GetKeyboardState(keyState)) {}
+	keyState[VK_MENU] = 0;
+	keyState[VK_CONTROL] = 0;
+	keyState[VK_SHIFT] = 0;
+	keyState[92] = 0;
+	keyState[91] = 0;
+	SetKeyboardState(keyState);
+}
+void SetZeroModKeysState(BYTE* keyState) {
+	keyState[VK_MENU] = 0;
+	keyState[VK_CONTROL] = 0;
+	keyState[VK_SHIFT] = 0;
+	keyState[92] = 0;
+	keyState[91] = 0;
+}
+void RegHotKey(UINT mod, UINT other, int id) {
+	//UnregisterHotKey(pv.settHK, id);
+	//RegisterHotKey(pv.settHK, id, mod, other);
+	OutputDebugStringW(L"Новое сочетание записано");
+}
+std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
+	std::wstring result;//
+	if (modKeys) {
+		static const std::wstring sysVk[] = {L"Ctrl", L"Win", L"Alt", L"Shift"};
+		static const byte MODKEYS[] = {MOD_CONTROL, MOD_WIN, MOD_ALT, MOD_SHIFT};
+		for (int i = 0; i < sizeof(sysVk) / sizeof(sysVk[0]); i++)
+			if (modKeys & MODKEYS[i]) {
+				if (!result.empty()) result += L" + ";
+				result += sysVk[i];
+			}
+	}
+	if (otherKey) {
+		static std::map<UINT, std::wstring> keyNames = {
+		{VK_SPACE, L"Space"}, {VK_RETURN, L"Enter"},
+		{VK_TAB, L"Tab"}, {VK_BACK, L"BkSp"},
+		{VK_ESCAPE, L"Esc"}, {VK_MENU, L"Alt"},
+		{VK_PAUSE, L"Pause"}, {VK_CAPITAL, L"CapsLk"},
+		{VK_NUMLOCK, L"NumLk"}, {VK_SCROLL, L"ScrLk"},
+		{VK_INSERT, L"Ins"}, {VK_SNAPSHOT, L"PrtSc"},
+		{VK_DELETE, L"Del"}, {VK_HOME, L"Home"},
+		{VK_END, L"End"}, {VK_PRIOR, L"PgUp"},
+		{VK_NEXT, L"PgDn"}, {VK_UP, L"Up"},
+		{VK_DOWN, L"Down"},	{VK_LEFT, L"Left"},
+		{VK_RIGHT, L"Right"}, {VK_F1, L"F1"},
+		{VK_F2, L"F2"},	{VK_F3, L"F3"},
+		{VK_F4, L"F4"},	{VK_F5, L"F5"},
+		{VK_F6, L"F6"},	{VK_F7, L"F7"},
+		{VK_F8, L"F8"},	{VK_F9, L"F9"},
+		{VK_F10, L"F10"}, {VK_F11, L"F11"},
+		{VK_F12, L"F12"}, {VK_F13, L"F13"},
+		{VK_F14, L"F14"}, {VK_F15, L"F15"},
+		{VK_F16, L"F16"}, {VK_F17, L"F17"},
+		{VK_F18, L"F18"}, {VK_F19, L"F19"},
+		{VK_F20, L"F20"}, {VK_F21, L"F21"},
+		{VK_F22, L"F22"}, {VK_F23, L"F23"},
+		{VK_F24, L"F24"}, {VK_VOLUME_MUTE, L"Mute"},
+		{VK_VOLUME_DOWN, L"VolDn"}, {VK_VOLUME_UP, L"VolUp"},
+		{VK_MEDIA_NEXT_TRACK, L"Next"}, {VK_MEDIA_PREV_TRACK, L"Prev"},
+		{VK_MEDIA_PLAY_PAUSE, L"Play"},
+		};
+		if (modKeys) result += L" + ";
+
+		if (keyNames.find(otherKey) != keyNames.end()) {
+			result += keyNames[otherKey];
+			return result;
+		}
+
+		BYTE keyState[256];
+		ZeroMemory(keyState, sizeof(keyState));
+		if (GetKeyboardState(keyState)) {}
+		keyState[20] = 1;
+		SetZeroModKeysState(keyState);
+		wchar_t buffer[5] = {0};
+		int len = ToUnicode(otherKey, MapVirtualKeyW(otherKey, MAPVK_VK_TO_VSC), keyState, buffer, 5, 0);
+		if (len == 1) {
+			result += buffer;
+			return result;
+		}
+		result += L"NULL";
+		pv.hk.canSet = 0;
+	}
+	if (result.empty())
+		result = PRESSKEYS;
+	return result;
 }

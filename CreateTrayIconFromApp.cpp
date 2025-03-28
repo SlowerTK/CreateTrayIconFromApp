@@ -52,184 +52,308 @@ void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	KillTimer(hwnd, uintptr);
 }
 
-static LRESULT CALLBACK TimerSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	static HFONT hFont = NULL;
-	static HBRUSH hBrush = NULL;
-	static HBRUSH hBrushEdit = NULL;
-	static HWND parent = NULL;
+LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+	if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN || wParam == WM_KEYUP || wParam == WM_SYSKEYUP)) {
+		KBDLLHOOKSTRUCT* kbd = (KBDLLHOOKSTRUCT*)lParam;
+		wchar_t vk = static_cast<wchar_t>(kbd->vkCode);
+		byte oldModKey = pv.hk.modKey;
+		byte oldOtherKey = pv.hk.otherKey;
+		if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
+			if (!pv.hk.isActive) return CallNextHookEx(NULL, nCode, wParam, lParam);
+			switch (vk) {
+			case VK_LMENU:
+			case VK_RMENU:
+				pv.hk.modKey |= MOD_ALT;
+				break;
+			case VK_LCONTROL:
+			case VK_RCONTROL:
+				pv.hk.modKey |= MOD_CONTROL;
+				break;
+			case VK_LSHIFT:
+			case VK_RSHIFT:
+				pv.hk.modKey |= MOD_SHIFT;
+				break;
+			case VK_LWIN:
+			case VK_RWIN:
+				pv.hk.modKey |= MOD_WIN;
+				break;
+			default:
+				pv.hk.otherKey = (byte)vk;
+				//OutputDebugStringW(std::to_wstring(pv.hk.otherKey).c_str());
+				break;
+			}
+			if (oldModKey == pv.hk.modKey && oldOtherKey == pv.hk.otherKey) {
+				return 1;
+			}
+			pv.hk.isFixed = pv.hk.canSet = 0;
+			if (pv.hk.modKey && pv.hk.otherKey) {
+				pv.hk.isFixed = 1;
+				if (pv.hk.canSet = RegisterHotKey(pv.settHK, 0, pv.hk.modKey, pv.hk.otherKey)) {
+					pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
+					//OutputDebugStringW((std::wstring(L"Подходящие сочетание ") + pv.hk.nameArr + L"\n").c_str());
+					UnregisterHotKey(pv.settHK, 0);
+				}
+			}
+		} else {
+			switch (vk) {
+			case VK_LMENU:
+			case VK_RMENU:
+				pv.hk.modKey &= ~MOD_ALT;
+				break;
+			case VK_LCONTROL:
+			case VK_RCONTROL:
+				pv.hk.modKey &= ~MOD_CONTROL;
+				break;
+			case VK_LSHIFT:
+			case VK_RSHIFT:
+				pv.hk.modKey &= ~MOD_SHIFT;
+				break;
+			case VK_LWIN:
+			case VK_RWIN:
+				pv.hk.modKey &= ~MOD_WIN;
+				break;
+			default:
+				if (vk == pv.hk.otherKey)
+					pv.hk.otherKey = 0;
+				else {
+					return CallNextHookEx(NULL, nCode, wParam, lParam);
+				}
+				break;
+			}
+			if (pv.hk.isFixed) {
+				return CallNextHookEx(NULL, nCode, wParam, lParam);
+			}
+		}
+		pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
+		InvalidateRect(pv.settHK, &pv.hk.textRect, TRUE);
+		return (pv.hk.isActive) ? 1 : CallNextHookEx(NULL, nCode, wParam, lParam);
+	}
+	return CallNextHookEx(NULL, nCode, wParam, lParam);
+}
+
+
+static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+	////static HWND parent = NULL;
+	//switch (uMsg) {
+	//case WM_CREATE: {
+	//	//parent = (HWND)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
+	static int cx, cy;
 	switch (uMsg) {
 	case WM_CREATE: {
-		parent = (HWND)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
-		hFont = CreateFontW(22, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Ariel");
-		hBrush = CreateSolidBrush(RGB(189, 189, 189));
-		hBrushEdit = CreateSolidBrush(RGB(255, 255, 255));
-		std::wstring timerStr = std::to_wstring(pv.timerToHide);
-		CreateWindowExW(0, STATIC, L"Через сколько восстановленное окно должно быть скрыто", WS_VISIBLE | WS_CHILD, 10, 10, 700, 30, hwnd, NULL, pv.hInstance, NULL);
-		CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", timerStr.c_str(), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_LEFT, 10, 40, 700, 30, hwnd, (HMENU)ID_EDIT_FIELD, pv.hInstance, NULL);
-		HWND hButton = CreateWindowExW(0, BUTTON, L"ОК", WS_VISIBLE | WS_CHILD | BS_CENTER | BS_FLAT | BS_VCENTER, 650, 200, 50, 30, hwnd, (HMENU)ID_OK_BUTTON, pv.hInstance, NULL);
-		SendMessage(hButton, WM_SETFONT, (WPARAM)hFont, TRUE);
+		RECT rect = {};
+		GetWindowRect(hwnd, &rect);
+		cx = rect.right - rect.left;
+		cy = rect.bottom - rect.top;
+		int dx = (cx - 106 * 3) / 4;
+		//OutputDebugString(std::wstring(L"cx = " + std::to_wstring(cx) + L" cy = " + std::to_wstring(cy) + L"\n").c_str());
+		pv.hHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandleW(NULL), 0);
+		CreateWindowExW(NULL, STATIC, NULL, WS_VISIBLE | WS_CHILD | SS_BLACKFRAME, 0, 0, cx, cy, hwnd, NULL, pv.hInstance, NULL);
+		pv.hButton1 = CreateWindowExW(0, BUTTON, L"Сохранить", WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy-45), 106, 30, hwnd, (HMENU)INT_PTR(ID_OK_BUTTON), pv.hInstance, NULL);
+		SendMessage(pv.hButton1, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		pv.hButton2 = CreateWindowExW(0, BUTTON, L"Сброс", WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 2), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_RESET_BUTTON), pv.hInstance, NULL);
+		SendMessage(pv.hButton2, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		pv.hButton3 = CreateWindowExW(0, BUTTON, L"Отмена", WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_CANCEL_BUTTON), pv.hInstance, NULL);
+		SendMessage(pv.hButton3, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		return 0;
 	}
-	case WM_CTLCOLORSTATIC: {
-		HDC hdcStatic = (HDC)wParam;
-		SetBkColor(hdcStatic, RGB(189, 189, 189));
-		SetTextColor(hdcStatic, RGB(0, 0, 0));
-		SelectObject(hdcStatic, hFont);
-		return (INT_PTR)hBrush;
+	case WM_CTLCOLORSTATIC:
+	case WM_CTLCOLORBTN: {
+		HDC hdc = (HDC)wParam;
+		SetBkMode(hdc, TRANSPARENT);
+		return (LRESULT)GetStockObject(NULL_BRUSH);
 	}
-	case WM_CTLCOLOREDIT: {
-		HDC hdcEdit = (HDC)wParam;
-		SetBkColor(hdcEdit, RGB(255, 255, 255));
-		SetTextColor(hdcEdit, RGB(0, 0, 0));
-		SelectObject(hdcEdit, hFont);
-		return (INT_PTR)hBrushEdit;
-	}
+	case WM_PAINT: {
+		EnableWindow(pv.hButton1, pv.hk.canSet);
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hwnd, &ps);
+		HBRUSH hBrush = CreateSolidBrush(RGB(240, 240, 240));
+		SelectObject(hdc, pv.hFont);
+		{//нижняя тёмная полоса
+			RECT rect = {0, cy-60, cx, cy};
+			FillRect(hdc, &rect, hBrush);
+		}
+		{//Текст и верхняя полоса
+			RECT rect = {0, 0, cx, 50};
+			FillRect(hdc, &rect, hBrush);
+			rect.left += 20;
+			SetBkMode(hdc, TRANSPARENT);
+			DrawTextW(hdc, L"Введите новое сочетание клавиш", -1, &rect, DT_VCENTER | DT_SINGLELINE);
+		}
+		{//текст над нижней полосой
+			LOGFONT lf = {};
+			GetObjectW(pv.hFont, sizeof(LOGFONT), &lf);
+			lf.lfHeight += 2;
+			HFONT hSmallFont = CreateFontIndirect(&lf);
+			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
+			RECT rect = {0,cy-100,cx,cy - 60};
+			DrawTextW(hdc, L"Допустимы только сочетания клавиш, имеющие не менее одной модальной клавиши,\n такой как Ctrl, Alt, Shift или Win.", -1, &rect, /*DT_VCENTER |*/ DT_CENTER);
+			SelectObject(hdc, hOldFont);
+			DeleteObject(hSmallFont);
+		}
+		{//Текст сочетания клавиш
+			LOGFONT lf = {};
+			GetObject(pv.hFont, sizeof(LOGFONT), &lf);
+			lf.lfHeight -= 18;
+			HFONT hSmallFont = CreateFontIndirect(&lf);
+			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
+			pv.hk.textRect = {20, 50, cx-20, cy - 100};
+			SIZE textSize;
+			GetTextExtentPoint32W(hdc, pv.hk.nameArr.c_str(), static_cast<int>(pv.hk.nameArr.length()), &textSize);
+			int textX = pv.hk.textRect.left + (pv.hk.textRect.right - pv.hk.textRect.left - textSize.cx) / 2;
+			int textY = pv.hk.textRect.top + (pv.hk.textRect.bottom - pv.hk.textRect.top - textSize.cy) / 2;
+			SetBkMode(hdc, TRANSPARENT);
+			TextOutW(hdc, textX, textY, pv.hk.nameArr.c_str(), static_cast<int>(pv.hk.nameArr.length()));
+			SelectObject(hdc, hOldFont);
+			DeleteObject(hSmallFont);
+		}
+		DeleteObject(hBrush);
+		EndPaint(hwnd, &ps);
+	} break;
 	case WM_COMMAND:
-		if (HIWORD(wParam) == EN_UPDATE && LOWORD(wParam) == ID_EDIT_FIELD) {
-			HWND hEdit = (HWND)lParam;
-			wchar_t buffer[16] = {0};
-			GetWindowTextW(hEdit, buffer, 16);
-			unsigned int value = wcstoul(buffer, NULL, 10);
-			unsigned int prevValue = (unsigned int)GetWindowLongPtr(hwnd, GWLP_USERDATA);
-			if (value < 1 || value > INT_MAX) {
-				SetWindowTextW(hEdit, std::to_wstring(prevValue).c_str());
-				SendMessageW(hEdit, EM_SETSEL, 0, -1);
-			} else {
-				SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)value);
-				pv.timerToHide = value;
-			}
-		} else if (LOWORD(wParam) == ID_OK_BUTTON) {
+		switch (LOWORD(wParam)) {
+		case ID_OK_BUTTON:
+			RegHotKey(pv.hk.modKey, pv.hk.otherKey, 1);
+			SetZeroModKeysState();
 			DestroyWindow(hwnd);
-			pv.settTimer = NULL;
+			break;
+		case ID_RESET_BUTTON:
+			RegHotKey(MOD_CONTROL | MOD_ALT, 'H', 1);
+			SetZeroModKeysState();
+			DestroyWindow(hwnd);
+			break;
+		case ID_CANCEL_BUTTON:
+			//не изменять ничего
+			SetZeroModKeysState();
+			DestroyWindow(hwnd);
+			break;
 		}
 		break;
-	case WM_CLOSE:
-		DestroyWindow(hwnd);
-		pv.settTimer = NULL;
-		break;
+	case WM_KILLFOCUS:
+		pv.hk.isActive = false;
+		SetZeroModKeysState();
+		return 0;
+	case WM_SETFOCUS:
+		pv.hk.isActive = true;
+		return 0;
 	case WM_DESTROY:
-		DeleteObject(hBrush);
-		DeleteObject(hBrushEdit);
-		DeleteObject(hFont);
-		EnableWindow(parent, TRUE);
-		SetForegroundWindow(parent);
+		if (pv.hHook) UnhookWindowsHookEx(pv.hHook);
+		EnableWindow(pv.settWin/*parent*/, TRUE);
+		SetForegroundWindow(pv.settWin/*parent*/);
+		pv.settHK = NULL;
 		break;
 	default:
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 	return 0;
+
+
 }
 
 static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	static unsigned int prevValue;
-	static HFONT hFont = NULL;
+	static unsigned int prevValue[2];
 	switch (uMsg) {
 	case WM_CREATE: {
 		LogAdd(L"Открыты настройки");
-		prevValue = pv.timerToHide;
-		hFont = CreateFontW(22, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Ariel");
-		pv.hSettMenu = CreateMenu();
-		pv.hSettSubMenu = CreatePopupMenu();
-		std::vector<LPCWSTR> subMenuItems = {(IsTaskScheduled(appName)) ? L"&Убрать из автозагрузки" : L"&Добавить в автозагрузку", L"&Изменить время автоскрытия"};
-		for (UINT j = 0; j < 2; ++j) {
-			MENUITEMINFO mii = {sizeof(MENUITEMINFO)};
-			mii.fMask = MIIM_STRING | MIIM_ID | MIIM_FTYPE | MIIM_DATA | MIIM_STATE;
-			mii.fType = MFT_OWNERDRAW;
-			mii.fState = (pv.isAdminMode || j ? MFS_ENABLED : MFS_DISABLED);
-			mii.fState |= (!j && IsTaskScheduled(appName) ? MFS_CHECKED : MFS_UNCHECKED);
-			mii.wID = 1001 + j;
-			mii.dwTypeData = const_cast<LPWSTR>(subMenuItems[j]);
-			mii.dwItemData = (ULONG_PTR)subMenuItems[j];
+		prevValue[0] = static_cast<unsigned int>(pv.isHideOn);
+		prevValue[1] = pv.timerToHide;
 
-			InsertMenuItemW(pv.hSettSubMenu, j, TRUE, &mii);
+		HICON hIcon = LoadIcon(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
+		SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+		SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+
+		NONCLIENTMETRICS ncm = {sizeof(NONCLIENTMETRICS)};
+		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
+		pv.hFont = CreateFontIndirect(&ncm.lfMessageFont);
+
+		struct ControlInfo {
+			LPCWSTR className;
+			LPCWSTR text;
+			DWORD style;
+			HMENU id;
+			HWND* hWnd;
+		} controls[] = {
+			{ STATIC,    WND_NAME_TEXT,        NULL,  NULL,  &pv.hAppText },
+			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)ID_LIST_APPLICATIONS, &pv.hApplicationsList },
+			{ STATIC,    WND_NAME_TEXT2,       NULL,  NULL,  &pv.hFavText },
+			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)ID_LIST_FAVORITES, &pv.hFavoritesList },
+			{ BUTTON,    ADDBUTTON_TEXT,       BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_ADD, &pv.hAddButton },
+			{ BUTTON,    REMOVEBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_REMOVE, &pv.hRemoveButton },
+			{ BUTTON,    RELOADBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_RELOAD, &pv.hReloadButton },
+			{ BUTTON,    STARTUP_TEXT,         BS_AUTOCHECKBOX | WS_DISABLED, (HMENU)ID_BUTTON_AUTOSTART, &pv.hCheckBoxStartUp },
+			{ BUTTON,    HINT_TEXT,            NULL, (HMENU)ID_BUTTON_HINT, &pv.hCheckBoxHint },
+			{ BUTTON,    CHECKBOX_TEXT,        BS_AUTOCHECKBOX, (HMENU)ID_BUTTON_TIMEAUTOHIDE, &pv.hCheckBoxButton },
+			{ STATIC,    EDITBOX_TEXT,         NULL, NULL, &pv.hEditBoxText },
+			{ STATIC,    HOTKEY_TEXT,          NULL, NULL, &pv.hHotKeysText },
+			{ STATIC,    L"Ctrl + Alt + H",    WS_BORDER | SS_CENTER | SS_CENTERIMAGE, NULL, &pv.hHotKeys },
+			{ BUTTON,    HOTKEYBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_HK, &pv.hHotKeysButton }
+		};
+
+		for (auto& ctrl : controls) {
+			HWND hWnd = CreateWindow(ctrl.className, ctrl.text, ctrl.style | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hwnd, ctrl.id, pv.hInstance, NULL);
+			SendMessage(hWnd, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+			*ctrl.hWnd = hWnd;
 		}
-		AppendMenuW(pv.hSettMenu, MF_POPUP | MF_OWNERDRAW, (UINT_PTR)pv.hSettSubMenu, L"&Меню");
-		SetMenu(hwnd, pv.hSettMenu);
-		HWND hText = CreateWindow(STATIC, WND_NAME_TEXT, WS_VISIBLE | WS_CHILD, 10, 0, 200, 30, hwnd, NULL, pv.hInstance, NULL);
-		SendMessage(hText, WM_SETFONT, (WPARAM)hFont, TRUE);
-		pv.hApplicationsList = CreateWindow(LISTBOX, NULL, WS_VISIBLE | WS_CHILD | WS_BORDER | LBS_NOTIFY, 10, 30, 200, 300, hwnd, (HMENU)ID_LIST_APPLICATIONS, pv.hInstance, NULL);
-		SendMessage(pv.hApplicationsList, WM_SETFONT, (WPARAM)hFont, TRUE);
-		pv.hText = CreateWindow(STATIC, WND_NAME_TEXT2, WS_VISIBLE | WS_CHILD, 380, 0, 300, 30, hwnd, NULL, pv.hInstance, NULL);
-		SendMessage(pv.hText, WM_SETFONT, (WPARAM)hFont, TRUE);
-		pv.hFavoritesList = CreateWindow(LISTBOX, NULL, WS_VISIBLE | WS_CHILD | WS_BORDER | LBS_NOTIFY, 380, 30, 200, 300, hwnd, (HMENU)ID_LIST_FAVORITES, pv.hInstance, NULL);
-		SendMessage(pv.hFavoritesList, WM_SETFONT, (WPARAM)hFont, TRUE);
-		pv.hAddButton = CreateWindow(BUTTON, ADDBUTTON_TEXT, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, 300, 100, 40, 30, hwnd, (HMENU)ID_BUTTON_ADD, pv.hInstance, NULL);
-		SendMessage(pv.hAddButton, WM_SETFONT, (WPARAM)hFont, TRUE);
-		pv.hRemoveButton = CreateWindow(BUTTON, REMOVEBUTTON_TEXT, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, 300, 140, 40, 30, hwnd, (HMENU)ID_BUTTON_REMOVE, pv.hInstance, NULL);
-		SendMessage(pv.hRemoveButton, WM_SETFONT, (WPARAM)hFont, TRUE);
-		pv.hReloadButton = CreateWindow(BUTTON, RELOADBUTTON_TEXT, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, 300, 30, 40, 30, hwnd, (HMENU)ID_BUTTON_RELOAD, pv.hInstance, NULL);
-		hFont = CreateFontW(22, 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Ariel");
-		SendMessage(pv.hReloadButton, WM_SETFONT, (WPARAM)hFont, TRUE);
+
+		if (IsTaskScheduled(appName))SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
+		else SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
+		if (pv.isAdminMode) EnableWindow(pv.hCheckBoxStartUp, TRUE);
+
+		std::wstring timerStr = std::to_wstring(pv.timerToHide);
+		pv.hEditBox = CreateWindowExW(WS_EX_CLIENTEDGE, EDIT, timerStr.c_str(), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)ID_EDIT_FIELD, pv.hInstance, NULL);
+		SendMessage(pv.hEditBox, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+
+		if (pv.isHideOn) {
+			SendMessage(pv.hCheckBoxButton, BM_SETCHECK, BST_CHECKED, 0);
+			EnableWindow(pv.hEditBoxText, TRUE);
+			EnableWindow(pv.hEditBox, TRUE);
+		} else {
+			SendMessage(pv.hCheckBoxButton, BM_SETCHECK, BST_UNCHECKED, 0);
+			EnableWindow(pv.hEditBoxText, FALSE);
+			EnableWindow(pv.hEditBox, FALSE);
+		}
+
+		LOGFONT lf = ncm.lfMessageFont;
+		lf.lfHeight -= 8;
+		pv.hFont = CreateFontIndirect(&lf);
+		SendMessage(pv.hHotKeys, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		lf.lfHeight += 8;
+		pv.hFont = CreateFontIndirect(&lf);
+		SendMessage(pv.hHotKeysButton, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+
 		UpdateFavoriteList();
 		UpdateApplicationsList();
-
 	}
-      break;
-	case WM_INITMENUPOPUP: {
-		MENUINFO mi = {sizeof(mi)};
-		mi.fMask = MIM_BACKGROUND;
-		mi.hbrBack = CreateSolidBrush(RGB(240, 240, 240));
-		SetMenuInfo((HMENU)wParam, &mi);
+				  break;
+	case WM_CTLCOLORBTN:
+	case WM_CTLCOLOREDIT:
+	case WM_CTLCOLORLISTBOX:
+	case WM_CTLCOLORSTATIC: {
+		HDC hdcStatic = (HDC)wParam;
+		SetBkMode(hdcStatic, TRANSPARENT);
+		return (LRESULT)GetStockObject(WHITE_PEN);
 	}
-       break;
-	case WM_MEASUREITEM:
-	{
-		MEASUREITEMSTRUCT* pMeasureItem = (MEASUREITEMSTRUCT*)lParam;
-		if (pMeasureItem->CtlType == ODT_MENU) {
-			HDC hdc = GetDC(hwnd);
-			RECT rc = {0, 0, 0, 0};
-			LPCWSTR text = (LPCWSTR)pMeasureItem->itemData;
-			DrawTextW(hdc, text, -1, &rc, DT_SINGLELINE | DT_CALCRECT | DT_LEFT);
-			ReleaseDC(hwnd, hdc);
-			pMeasureItem->itemWidth = rc.right - rc.left;
-			pMeasureItem->itemHeight = rc.bottom - rc.top;
-		}
-	}
-	return TRUE;
-	case WM_DRAWITEM: {
-		DRAWITEMSTRUCT* pDrawItem = (DRAWITEMSTRUCT*)lParam;
-		if (pDrawItem->CtlType == ODT_MENU) {
-			HDC hdc = pDrawItem->hDC;
-			RECT rcItem = pDrawItem->rcItem;
-			HBRUSH hBrush;
-			COLORREF textColor;
-
-			if (pDrawItem->itemState & ODS_SELECTED) {
-				hBrush = CreateSolidBrush(RGB(230, 230, 230));
-			} else if (pDrawItem->itemState & ODS_SELECTED && pDrawItem->itemState & ODS_HOTLIGHT) {
-				hBrush = CreateSolidBrush(RGB(233, 233, 233));
-			} else {
-				hBrush = CreateSolidBrush(RGB(240, 240, 240));
-			}
-			FillRect(hdc, &rcItem, hBrush);
-			DeleteObject(hBrush);
-
-			if (pDrawItem->itemState & ODS_DISABLED) {
-				textColor = RGB(128, 128, 128);
-			} else {
-				textColor = RGB(0, 0, 0);
-			}
-
-			SetTextColor(hdc, textColor);
-			SetBkMode(hdc, TRANSPARENT);
-
-			LPCWSTR text = (LPCWSTR)pDrawItem->itemData;
-			if (text) {
-				DrawTextW(hdc, text, -1, &rcItem, DT_SINGLELINE | DT_VCENTER | DT_CENTER | DT_HIDEPREFIX);
-			}
-		}
-	}
-					return TRUE;
 	case WM_SIZE: {
 		int width = LOWORD(lParam);
 		int height = HIWORD(lParam);
+		const int fixedWidth = 400;
+		int rightCorner = width - (fixedWidth + 10);
 
-		MoveWindow(pv.hApplicationsList, 10, 30, width / 2 - 40, height - 30, TRUE);
-		MoveWindow(pv.hText, width / 2 + 30, 0, 300, 30, TRUE);
-		MoveWindow(pv.hFavoritesList, width / 2 + 30, 30, width / 2 - 40, height - 30, TRUE);
-		MoveWindow(pv.hAddButton, width / 2 - 20, height / 2 - 40, 40, 30, TRUE);
-		MoveWindow(pv.hRemoveButton, width / 2 - 20, height / 2, 40, 30, TRUE);
-		MoveWindow(pv.hReloadButton, width / 2 - 20, 30, 40, 30, TRUE);
+		MoveWindow(pv.hAppText, 10, 5, 300, 30, TRUE);
+		MoveWindow(pv.hApplicationsList, 10, 30, width / 2 - 250, height - 30, TRUE);
+		MoveWindow(pv.hFavText, width / 2 - 170, 5, 300, 30, TRUE);
+		MoveWindow(pv.hFavoritesList, width / 2 - 170, 30, width / 2 - 250, height - 30, TRUE);
+		MoveWindow(pv.hAddButton, width / 2 - 225, height / 2 - 40, 40, 30, TRUE);
+		MoveWindow(pv.hRemoveButton, width / 2 - 225, height / 2, 40, 30, TRUE);
+		MoveWindow(pv.hReloadButton, width / 2 - 225, height / 2 - 120, 40, 30, TRUE);
+		MoveWindow(pv.hCheckBoxStartUp, rightCorner, height / 2 - 140, fixedWidth - 50, 30, TRUE);
+		MoveWindow(pv.hCheckBoxButton, rightCorner, height / 2 - 110, fixedWidth - 50, 30, TRUE);
+		MoveWindow(pv.hCheckBoxHint, width - 40, height / 2 - 110, 30, 30, TRUE);
+		MoveWindow(pv.hEditBoxText, rightCorner, height / 2 - 80, fixedWidth, 30, TRUE);
+		MoveWindow(pv.hEditBox, rightCorner, height / 2 - 50, fixedWidth, 30, TRUE);
+		MoveWindow(pv.hHotKeysText, rightCorner, height / 2, fixedWidth, 30, TRUE);
+		MoveWindow(pv.hHotKeys, rightCorner, height / 2 + 30, fixedWidth, height / 6 + 20, TRUE);
+		MoveWindow(pv.hHotKeysButton, rightCorner, height - height / 3 + 60, fixedWidth, 30, TRUE);
+
 		InvalidateRect(hwnd, NULL, TRUE);
 		break;
 	}
@@ -258,7 +382,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
 				auto eraseWindow = [HW](std::vector<HiddenWindow>& vec) {
 					auto it = std::find_if(vec.begin(), vec.end(),
-             [&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
+										   [&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
 					if (it != vec.end()) vec.erase(it);	};
 				eraseWindow(favoriteWindows);
 				eraseWindow(hiddenWindows);
@@ -273,30 +397,38 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		case ID_BUTTON_RELOAD:
 			UpdateApplicationsList();
 			break;
-		case ID_AUTOSTART: {
-			MENUITEMINFO mii = {sizeof(MENUITEMINFO)};
-			mii.fMask = MIIM_DATA | MIIM_STATE;
-			GetMenuItemInfoW(pv.hSettMenu, ID_AUTOSTART, FALSE, &mii);
-			if (mii.fState & MFS_CHECKED) {
-				mii.fState &= ~MFS_CHECKED;
-				mii.dwItemData = (ULONG_PTR)L"Добавить в автозагрузку";
-				StartupChanging(false);
-				LogAdd(L"Удалено из автозагрузки");
+		case ID_BUTTON_TIMEAUTOHIDE:
+			if (SendMessage(pv.hCheckBoxButton, BM_GETCHECK, 0, 0) == BST_CHECKED) {
+				EnableWindow(pv.hEditBoxText, TRUE);
+				EnableWindow(pv.hEditBox, TRUE);
 			} else {
-				mii.fState |= MFS_CHECKED;
-				mii.dwItemData = (ULONG_PTR)L"Убрать из автозагрузки";
-				StartupChanging(true);
-				LogAdd(L"Добавлено в автозагрузку");
+				EnableWindow(pv.hEditBoxText, FALSE);
+				EnableWindow(pv.hEditBox, FALSE);
 			}
-			SetMenuItemInfoW(pv.hSettMenu, ID_AUTOSTART, FALSE, &mii);
-			DrawMenuBar(pv.settWin);
-		}
-       break;
-
-		case ID_TIME_AUTOHIDE:
-			EnableWindow(hwnd, FALSE);
-			CreateTimerSettWnd();
 			break;
+		case ID_BUTTON_HINT:
+			MessageBox(hwnd, HINT_MSG, L"Инфо", MB_OK | MB_ICONINFORMATION);
+			break;
+		case ID_EDIT_FIELD: {
+			if (HIWORD(wParam) != EN_UPDATE)
+				break;
+			HWND hEdit = (HWND)lParam;
+			wchar_t buffer[16] = {0};
+			GetWindowTextW(hEdit, buffer, 16);
+			unsigned int value = wcstoul(buffer, NULL, 10);
+			unsigned int prevValue = (unsigned int)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+			if (value < 1 || value > INT_MAX) {
+				SetWindowTextW(hEdit, std::to_wstring(prevValue).c_str());
+				SendMessageW(hEdit, EM_SETSEL, 0, -1);
+			} else {
+				SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)value);
+				pv.timerToHide = value;
+			}
+		}
+		break;
+		case ID_BUTTON_HK:
+			EnableWindow(hwnd, FALSE);
+			CreateHKSettWnd();
 		}
 		break;
 	case WM_CLOSE:
@@ -307,15 +439,31 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			for (const auto& vec : favoriteWindows)
 				favorite += serializeToWstring(vec);
 			WriteMyFile(FILEPATHNAME, favorite);
-			if (prevValue != pv.timerToHide)
-				SaveNumberToRegistry();
+			pv.isHideOn = IsDlgButtonChecked(hwnd, ID_BUTTON_TIMEAUTOHIDE);
+			bool first = (prevValue[0] != static_cast<unsigned int>(pv.isHideOn)),
+				second = (prevValue[1] != pv.timerToHide);
+			if (first || second)
+				SaveToRegistry(first, second);
+
+			if (pv.isAdminMode)
+				if (IsDlgButtonChecked(hwnd, ID_BUTTON_AUTOSTART)) {
+					StartupChanging(true);
+					LogAdd(L"Добавлено в автозагрузку");
+					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
+				} else {
+					StartupChanging(false);
+					LogAdd(L"Удалено из автозагрузки");
+					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
+				}
+
 			LogAdd(L"Файл настроек переписан");
 			CheckAndDeleteOldLogs(GetCurrentDate() + L".log");
 		}
 		DeleteList(pv.hApplicationsList);
 		DeleteList(pv.hFavoritesList);
+		DeleteObject(pv.hFont);
 		pv.settWin = NULL;
-		pv.settTimer = NULL;
+		pv.settHK = NULL;
 		DestroyWindow(hwnd);
 		break;
 	default:
@@ -328,6 +476,8 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	case WM_CREATE:
 		SetTimer(hwnd, TIMER_ID, SECOND, NULL);
 		break;
+	case WM_CTLCOLORSTATIC:
+		return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
 	case WM_TIMER:
 		for (auto& fw : favoriteWindows) {//наверное лучше сделать отдельный поток под это действие
 			FindWindowFromFile(fw, false);
@@ -347,14 +497,14 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			GetCursorPos(&cursorPos);
 			SetForegroundWindow(hwnd);
 			UpdateTrayMenu(isDebug);
-			int cmd = TrackPopupMenu(pv.hMenu, TPM_RETURNCMD | TPM_NONOTIFY, cursorPos.x, cursorPos.y, NULL, hwnd, NULL);
+			int cmd = TrackPopupMenu(pv.hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_CENTERALIGN, cursorPos.x, cursorPos.y, NULL, hwnd, NULL);
 			if (cmd >= 1000 && cmd < 1000 + hiddenWindows.size()) {
 				int index = cmd - 1000;
 				ShowWindow(hiddenWindows[index].hwnd, SW_SHOW);
 				SetForegroundWindow(hiddenWindows[index].hwnd);
 				auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
 									   [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
-				if (it != favoriteWindows.end()) {
+				if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
 					it->isFavorite = TIMED_WINDOW;
 					SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
 				}
@@ -412,21 +562,24 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	DebugModCheck(lpCmdLine);
 	pv.WM_TASKBAR_CREATED = RegisterWindowMessageW(L"TaskbarCreated");
 
-	pv.wc1 = RegisterNewClass(L"CTRIFATrayApp", TrayProc, RGB(240, 240, 240));
-	pv.wc2 = RegisterNewClass(L"CTIFA Settings", SettingsProc, RGB(240, 240, 240));
-	pv.wc3 = RegisterNewClass(L"CTIFA Timer Settings", TimerSettProc, RGB(189, 189, 189));
-	HWND hwnd = CreateWindowExW(0, pv.wc1.lpszClassName, pv.wc1.lpszClassName, NULL, NULL, NULL, NULL, NULL, NULL, NULL, pv.hInstance, NULL);
+	INITCOMMONCONTROLSEX icc = {sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES};
+	InitCommonControlsEx(&icc);
 
-	bool isCanCTIFA = RegisterHotKey(hwnd, HK_CTIFA_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'H');
+	pv.wc1 = RegisterNewClass(L"CTRIFATrayApp", TrayProc);
+	pv.wc2 = RegisterNewClass(L"CTIFA Settings", SettingsProc);
+	pv.wc3 = RegisterNewClass(L"CTIFA Timer Settings", HKSettProc);
+	pv.trayWnd = CreateWindowExW(0, pv.wc1.lpszClassName, pv.wc1.lpszClassName, NULL, NULL, NULL, NULL, NULL, NULL, NULL, pv.hInstance, NULL);
+
+	bool isCanCTIFA = RegisterHotKey(pv.trayWnd, HK_CTIFA_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'H');
 	if (!isCanCTIFA) {
 		MBERROR(ET_HOTKEY);
 		LogAdd(ET_HOTKEY);
-		UnregisterHotKey(hwnd, HK_CTIFA_ID);
+		UnregisterHotKey(pv.trayWnd, HK_CTIFA_ID);
 		ReleaseMutex(pv.hMutex);
 		CloseHandle(pv.hMutex);
 		return -1;
 	}
-	AddTrayIcon(hwnd);
+	AddTrayIcon(pv.trayWnd);
 	{
 		CheckFolderAndFile(FILEPATHNAME);
 		std::wstring favorites = ReadSettingsFile();
@@ -442,8 +595,8 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		DispatchMessage(&msg);
 	}
 
-	RemoveTrayIcon(hwnd);
-	UnregisterHotKey(hwnd, HK_CTIFA_ID);
+	RemoveTrayIcon(pv.trayWnd);
+	UnregisterHotKey(pv.trayWnd, HK_CTIFA_ID);
 	UnregisterClass(pv.wc1.lpszClassName, pv.wc1.hInstance);
 	UnregisterClass(pv.wc2.lpszClassName, pv.wc2.hInstance);
 	ReleaseMutex(pv.hMutex);

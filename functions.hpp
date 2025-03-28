@@ -2,15 +2,14 @@
 #include <string>
 #include <vector>
 #include <windows.h>
-#include <unordered_map>
 #include "resource.h"
 #include <algorithm>
-#include <comdef.h>
 #include <Wbemidl.h>
 #include <Psapi.h>
 #include <ShlObj.h>
 #include <sstream>
 #include <iomanip>
+#include <map>
 #pragma comment(lib, "wbemuuid.lib")
 
 #include <taskschd.h>
@@ -19,16 +18,32 @@
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "comsupp.lib")
 
+#pragma comment(linker,"\"/manifestdependency:type='win32' \
+name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#pragma comment(lib, "comctl32.lib")
+
+struct HotKeys {
+	std::wstring nameArr = PRESSKEYS;///Пересчитывать значение при запуске
+	byte modKey, otherKey;
+	bool canSet, isFixed, isActive;
+	RECT textRect;
+};
 struct ProgramVariable {
-	HWND settWin, settTimer;
+	HWND trayWnd, settWin, settHK;
 	WNDCLASS wc1, wc2, wc3;
 	HINSTANCE hInstance;
 	HMENU hMenu, hSettMenu, hSettSubMenu;
-	HWND hApplicationsList, hFavoritesList, hAddButton, hRemoveButton, hText, hReloadButton;
+	HWND hAppText, hApplicationsList, hFavoritesList, hAddButton, hRemoveButton,
+		hFavText, hReloadButton, hCheckBoxStartUp, hCheckBoxButton, hCheckBoxHint,
+		hEditBoxText, hEditBox, hHotKeysText, hHotKeys, hHotKeysButton, hButton1, hButton2, hButton3;
 	HANDLE hMutex;
+	HFONT hFont;
+	HHOOK hHook;
 	UINT WM_TASKBAR_CREATED;
 	unsigned int timerToHide;
-	bool isDebugMode, isAdminMode;
+	HotKeys hk;
+	bool isDebugMode, isAdminMode, isHideOn;
 };
 struct HiddenWindow {
 	HWND hwnd = 0;
@@ -55,21 +70,15 @@ static std::wstring exceptionProcessNames[] = {
 	L"PowerToys.PowerLauncher.exe", //PowerToys Run
 	L"ApplicationFrameHost.exe", //Параметры
 	L"SystemSettings.exe", //Параметры
-
-			//L"Shell_TrayWnd", //Панель задач
-			//L"Progman", //Рабочий стол
-			//L"TaskManagerWindow", //Диспетчер задач
-			//L"TopLevelWindowForOverflowXamlIsland", //Скрытая панель трея
-			//L"WinUIDesktopWin32WindowClass", //Всплывающие окно трея у приложений использующих WinUI3
-			//L"SystemTray_Main", //Всплывающие окно трея у системных приложений
-			//L"Windows.UI.Core.CoreWindow",//Другие окна UI Windows
-			//L"WindowsDashboard", //Панель слева
-			//L"CTRIFATrayApp", //myself
-			//L"CTIFA Settings", //myself2
-			//L"Xaml_WindowedPopupClass" //Предпросмотр окна
+};
+static std::wstring exceptionClassNames[] = {
+	L"",
+	L"CTRIFATrayApp",
+	L"CTIFA Settings",
+	L"CTIFA Timer Settings"
 };
 
-WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc, COLORREF color);
+WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc);
 bool isRunAsAdmin();
 void DebugModCheck(wchar_t* lpCmdLine);
 static HBITMAP IconToBitmap(HICON hIcon);
@@ -102,6 +111,10 @@ bool IsTaskScheduled(const std::wstring& taskName);
 void DeleteScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName);
 void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName, const std::wstring& exePath);
 void StartupChanging(bool isAdd);
-void CreateTimerSettWnd();
+void CreateHKSettWnd();
 void LoadNumberFromRegistry();
-void SaveNumberToRegistry();
+void SaveToRegistry(bool a, bool b);
+void SetZeroModKeysState();
+void SetZeroModKeysState(BYTE* keyState);
+void RegHotKey(UINT mod, UINT other, int id);
+std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey);
