@@ -24,7 +24,7 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #pragma comment(lib, "comctl32.lib")
 
 struct HotKeys {
-	std::wstring nameArr = PRESSKEYS;///Пересчитывать значение при запуске
+	std::wstring nameArr;
 	byte modKey, otherKey;
 	bool canSet, isFixed, isActive;
 	RECT textRect;
@@ -118,3 +118,7 @@ void SetZeroModKeysState();
 void SetZeroModKeysState(BYTE* keyState);
 void RegHotKey(UINT mod, UINT other, int id);
 std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey);
+void SaveHotKeys();
+void ReadHotKeys();
+void AddTrayIcon(HWND hwnd);
+void RemoveTrayIcon(HWND hwnd);

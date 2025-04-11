@@ -1,45 +1,5 @@
 ﻿#include "functions.hpp"
 
-void AddTrayIcon(HWND hwnd) {
-	static bool count = 0;
-	while (!FindWindowW(L"Shell_TrayWnd", NULL)) {
-		Sleep(100);
-	}
-	NOTIFYICONDATA nid = {};
-	nid.cbSize = sizeof(NOTIFYICONDATA);
-	nid.hWnd = hwnd;
-	nid.uID = 1;
-	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
-	nid.uCallbackMessage = TRAY_ICON_MESSAGE;
-	nid.hIcon = LoadIcon(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
-	if (!nid.hIcon) LogAdd(L"Ошибка загрузки иконки");
-	wcscpy_s(nid.szTip, SZ_TIP);
-	if (Shell_NotifyIconW(NIM_ADD, &nid)) {
-		LogAdd(L"Иконка создана");
-	} else if (!count) {
-		LogAdd(L"Первая попытка добавить иконку не удалась, жду TaskbarCreated...");
-		count = 1;
-	} else {
-		DWORD err = GetLastError();
-		wchar_t buf[64];
-		swprintf_s(buf, L"Ошибка создания иконки: 0x%08X", static_cast<UINT>(err));
-		LogAdd(buf);
-	}
-}
-void RemoveTrayIcon(HWND hwnd) {
-	NOTIFYICONDATA nid = {};
-	nid.cbSize = sizeof(NOTIFYICONDATA);
-	nid.hWnd = hwnd;
-	nid.uID = 1;
-	if (Shell_NotifyIconW(NIM_DELETE, &nid)) {
-		LogAdd(L"Иконка успешно удалена");
-	} else {
-		DWORD err = GetLastError();
-		wchar_t buf[64];
-		swprintf_s(buf, L"Ошибка удаления иконки: 0x%08X", static_cast<UINT>(err));
-		LogAdd(buf);
-	}
-}
 void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
 						   [&](const HiddenWindow& wnd) { return wnd.isFavorite == TIMED_WINDOW; });
@@ -212,12 +172,12 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case ID_OK_BUTTON:
-			RegHotKey(pv.hk.modKey, pv.hk.otherKey, 1);
+			RegHotKey(pv.hk.modKey, pv.hk.otherKey, HK_CTIFA_ID);
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
 			break;
 		case ID_RESET_BUTTON:
-			RegHotKey(MOD_CONTROL | MOD_ALT, 'H', 1);
+			RegHotKey(MOD_CONTROL | MOD_ALT, 'H', HK_CTIFA_ID);
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
 			break;
@@ -273,19 +233,19 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			HWND* hWnd;
 		} controls[] = {
 			{ STATIC,    WND_NAME_TEXT,        NULL,  NULL,  &pv.hAppText },
-			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)ID_LIST_APPLICATIONS, &pv.hApplicationsList },
+			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_APPLICATIONS), &pv.hApplicationsList },
 			{ STATIC,    WND_NAME_TEXT2,       NULL,  NULL,  &pv.hFavText },
-			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)ID_LIST_FAVORITES, &pv.hFavoritesList },
-			{ BUTTON,    ADDBUTTON_TEXT,       BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_ADD, &pv.hAddButton },
-			{ BUTTON,    REMOVEBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_REMOVE, &pv.hRemoveButton },
-			{ BUTTON,    RELOADBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_RELOAD, &pv.hReloadButton },
-			{ BUTTON,    STARTUP_TEXT,         BS_AUTOCHECKBOX | WS_DISABLED, (HMENU)ID_BUTTON_AUTOSTART, &pv.hCheckBoxStartUp },
-			{ BUTTON,    HINT_TEXT,            NULL, (HMENU)ID_BUTTON_HINT, &pv.hCheckBoxHint },
-			{ BUTTON,    CHECKBOX_TEXT,        BS_AUTOCHECKBOX, (HMENU)ID_BUTTON_TIMEAUTOHIDE, &pv.hCheckBoxButton },
+			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_FAVORITES), &pv.hFavoritesList },
+			{ BUTTON,    ADDBUTTON_TEXT,       BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_ADD), &pv.hAddButton },
+			{ BUTTON,    REMOVEBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_REMOVE), &pv.hRemoveButton },
+			{ BUTTON,    RELOADBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_RELOAD), &pv.hReloadButton },
+			{ BUTTON,    STARTUP_TEXT,         BS_AUTOCHECKBOX | WS_DISABLED, (HMENU)INT_PTR(ID_BUTTON_AUTOSTART), &pv.hCheckBoxStartUp },
+			{ BUTTON,    HINT_TEXT,            NULL, (HMENU)INT_PTR(ID_BUTTON_HINT), &pv.hCheckBoxHint },
+			{ BUTTON,    CHECKBOX_TEXT,        BS_AUTOCHECKBOX, (HMENU)INT_PTR(ID_BUTTON_TIMEAUTOHIDE), &pv.hCheckBoxButton },
 			{ STATIC,    EDITBOX_TEXT,         NULL, NULL, &pv.hEditBoxText },
 			{ STATIC,    HOTKEY_TEXT,          NULL, NULL, &pv.hHotKeysText },
-			{ STATIC,    L"Ctrl + Alt + H",    WS_BORDER | SS_CENTER | SS_CENTERIMAGE, NULL, &pv.hHotKeys },
-			{ BUTTON,    HOTKEYBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)ID_BUTTON_HK, &pv.hHotKeysButton }
+			{ STATIC,    pv.hk.nameArr.c_str(),WS_BORDER | SS_CENTER | SS_CENTERIMAGE, NULL, &pv.hHotKeys},
+			{ BUTTON,    HOTKEYBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_HK), &pv.hHotKeysButton }
 		};
 
 		for (auto& ctrl : controls) {
@@ -299,7 +259,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		if (pv.isAdminMode) EnableWindow(pv.hCheckBoxStartUp, TRUE);
 
 		std::wstring timerStr = std::to_wstring(pv.timerToHide);
-		pv.hEditBox = CreateWindowExW(WS_EX_CLIENTEDGE, EDIT, timerStr.c_str(), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)ID_EDIT_FIELD, pv.hInstance, NULL);
+		pv.hEditBox = CreateWindowExW(WS_EX_CLIENTEDGE, EDIT, timerStr.c_str(), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)INT_PTR(ID_EDIT_FIELD), pv.hInstance, NULL);
 		SendMessage(pv.hEditBox, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 
 		if (pv.isHideOn) {
@@ -570,7 +530,8 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	pv.wc3 = RegisterNewClass(L"CTIFA Timer Settings", HKSettProc);
 	pv.trayWnd = CreateWindowExW(0, pv.wc1.lpszClassName, pv.wc1.lpszClassName, NULL, NULL, NULL, NULL, NULL, NULL, NULL, pv.hInstance, NULL);
 
-	bool isCanCTIFA = RegisterHotKey(pv.trayWnd, HK_CTIFA_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'H');
+	ReadHotKeys();
+	bool isCanCTIFA = RegisterHotKey(pv.trayWnd, HK_CTIFA_ID, pv.hk.modKey, pv.hk.otherKey);
 	if (!isCanCTIFA) {
 		MBERROR(ET_HOTKEY);
 		LogAdd(ET_HOTKEY);

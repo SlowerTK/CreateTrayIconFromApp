@@ -91,7 +91,7 @@ void CloseApp() {
 	}
 	PostQuitMessage(0);
 }
-std::wstring GetProcessCommandLine(DWORD processID) {
+static std::wstring GetProcessCommandLine(DWORD processID) {
 	HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
 	if (FAILED(hres)) {
 		LogAdd(L"Ошибка инициализации COM");
@@ -170,7 +170,7 @@ std::wstring GetProcessCommandLine(DWORD processID) {
 
 	return commandLine;
 }
-BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
+static BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
 	HWND hApplicationsList = (HWND)lParam;
 	wchar_t windowTitle[MAX_PATH] = {0};
 
@@ -219,7 +219,7 @@ void UpdateFavoriteList() {
 		SendMessage(pv.hFavoritesList, LB_SETITEMDATA, index, (LPARAM)HW);
 	}
 }
-HICON GetIcon(HWND hwnd) {
+static HICON GetIcon(HWND hwnd) {
 	HICON hIcon = (HICON)SendMessage(hwnd, WM_GETICON, ICON_SMALL, 0);
 	if (!hIcon) {
 		hIcon = (HICON)GetClassLongPtr(hwnd, GCLP_HICONSM);
@@ -317,25 +317,25 @@ std::wstring GetAllowedProcessName(DWORD processID) {
 	return processName;
 }
 void CheckFolderAndFile(const std::wstring& fileName) {
-    PWSTR appDataPath;
+	PWSTR appDataPath;
 	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
-        MBATTENTION(ET_APPDATA);
-        return;
-    }
-    std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
-    if (!CreateDirectory(folderPath.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
-        MBATTENTION(ET_CREATEFOLDER);
-        return;
-    }
-    std::wstring filePath = folderPath + fileName;
-    HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile == INVALID_HANDLE_VALUE) {
-        if (GetLastError() != ERROR_FILE_EXISTS) {
-            MBATTENTION(ET_CREATEFILE);
-        }
-    } else {
-        CloseHandle(hFile);
-    }
+		MBATTENTION(ET_APPDATA);
+		return;
+	}
+	std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
+	if (!CreateDirectory(folderPath.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
+		MBATTENTION(ET_CREATEFOLDER);
+		return;
+	}
+	std::wstring filePath = folderPath + fileName;
+	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) {
+		if (GetLastError() != ERROR_FILE_EXISTS) {
+			MBATTENTION(ET_CREATEFILE);
+		}
+	} else {
+		CloseHandle(hFile);
+	}
 }
 std::wstring ReadSettingsFile() {
 	PWSTR appDataPath;
@@ -371,17 +371,17 @@ void WriteMyFile(std::wstring fileName, const std::wstring& content, bool isAdd)
 		MBATTENTION(ET_APPDATA);
 		return;
 	}
-    std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + fileName;
-    HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, isAdd ? OPEN_EXISTING : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (hFile == INVALID_HANDLE_VALUE) {
-        MBATTENTION(ET_FILEOPEN);
-        return;
-    }
-    if (isAdd) SetFilePointer(hFile, 0, NULL, FILE_END);
-    DWORD bytesWritten;
-    if (!WriteFile(hFile, content.c_str(), static_cast<DWORD>(content.length() * sizeof(wchar_t)), &bytesWritten, NULL))
-        MBATTENTION(ET_FILEWRITE);
-    CloseHandle(hFile);
+	std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + fileName;
+	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, isAdd ? OPEN_EXISTING : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	if (hFile == INVALID_HANDLE_VALUE) {
+		MBATTENTION(ET_FILEOPEN);
+		return;
+	}
+	if (isAdd) SetFilePointer(hFile, 0, NULL, FILE_END);
+	DWORD bytesWritten;
+	if (!WriteFile(hFile, content.c_str(), static_cast<DWORD>(content.length() * sizeof(wchar_t)), &bytesWritten, NULL))
+		MBATTENTION(ET_FILEWRITE);
+	CloseHandle(hFile);
 }
 std::wstring serializeToWstring(const HiddenWindow& hw) {
 	std::wostringstream oss;
@@ -411,7 +411,7 @@ void FindWindowFromFile(HiddenWindow& windowToFind, bool isFromFile) {
 		CollapseToTray(windowToFind.hwnd, &windowToFind);
 	}
 }
-HiddenWindow deserializeOne(const std::wstring& str) {
+static HiddenWindow deserializeOne(const std::wstring& str) {
 	std::wistringstream iss(str);
 	HiddenWindow s{};
 	std::wstring token;
@@ -482,7 +482,7 @@ void CheckAndDeleteOldLogs(const std::wstring& currentLogFile) {
 			DeleteFile((folderPath + L"\\" + oldestFile->first).c_str());
 	}
 }
-std::wstring GetTime() {
+static std::wstring GetTime() {
 	std::wstringstream wss;
 	std::time_t t = std::time(nullptr);
 	std::tm tm;
@@ -666,13 +666,13 @@ void StartupChanging(bool isAdd) {
 	CoUninitialize();
 }
 void CreateHKSettWnd() {
-    if (!pv.settHK) {
-        RECT rect;
-        GetWindowRect(pv.settWin, &rect);
+	if (!pv.settHK) {
+		RECT rect;
+		GetWindowRect(pv.settWin, &rect);
 		int cx = 600;
 		int cy = 300;
 		int x = rect.left + ((rect.right - rect.left) >> 1) - (cx >> 1);
-        int y = rect.top + ((rect.bottom - rect.top) >> 1) - (cy >> 1);
+		int y = rect.top + ((rect.bottom - rect.top) >> 1) - (cy >> 1);
 		pv.settHK = CreateWindowExW(NULL, pv.wc3.lpszClassName, L"Введите новое сочетание клавиш", WS_CHILD | WS_POPUP | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
 	}
 }
@@ -682,15 +682,22 @@ void LoadNumberFromRegistry() {
 	DWORD size2 = sizeof(pv.timerToHide);
 	pv.isHideOn = true;
 	pv.timerToHide = SECOND;
+	bool a=false, b=false;
 	if (RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
 		if (RegQueryValueExW(hKey, KEY1, NULL, NULL, (BYTE*)&pv.isHideOn, &size1) != ERROR_SUCCESS) {
-			LogAdd(L"Значение отсутствует, используем стандартное: " + std::to_wstring(pv.isHideOn));
-			RegSetValueExW(hKey, KEY1, NULL, REG_DWORD, (BYTE*)&pv.isHideOn, sizeof(pv.isHideOn));
+			LogAdd(L"Значение KEY1 отсутствует, используем стандартное: " + std::to_wstring(pv.isHideOn));
+			a = true;
 		}
 		if (RegQueryValueExW(hKey, KEY2, NULL, NULL, (BYTE*)&pv.timerToHide, &size2) != ERROR_SUCCESS) {
-			LogAdd(L"Значение отсутствует, используем стандартное: " + std::to_wstring(pv.timerToHide));
-			RegSetValueExW(hKey, KEY2, NULL, REG_DWORD, (BYTE*)&pv.timerToHide, sizeof(pv.timerToHide));
+			LogAdd(L"Значение KEY2 отсутствует, используем стандартное: " + std::to_wstring(pv.timerToHide));
+			b = true;
 		}
+		RegCloseKey(hKey);
+		RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL);
+		if (a)
+			RegSetKeyValueW(hKey, NULL, KEY1, REG_BINARY, &pv.isHideOn, sizeof(pv.isHideOn));
+		if (b)
+			RegSetKeyValueW(hKey, NULL, KEY2, REG_DWORD, &pv.timerToHide, sizeof(pv.timerToHide));
 		RegCloseKey(hKey);
 	} else {
 		LogAdd(L"Ключ не найден, используем стандартные настройки");
@@ -700,11 +707,11 @@ void SaveToRegistry(bool a, bool b) {
 	HKEY hKey;
 	if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
 		if (a) {
-			RegSetValueExW(hKey, KEY1, NULL, REG_DWORD, (BYTE*)&pv.isHideOn, sizeof(pv.isHideOn));
+			RegSetKeyValueW(hKey, NULL, KEY1, REG_BINARY, &pv.isHideOn, sizeof(pv.isHideOn));
 			LogAdd(std::wstring(L"Таймер ") + ((pv.isHideOn) ? L"включён" : L"выключен"));
 		}
 		if (b) {
-			RegSetValueExW(hKey, KEY2, NULL, REG_DWORD, (BYTE*)&pv.timerToHide, sizeof(pv.timerToHide));
+			RegSetKeyValueW(hKey, NULL, KEY2, REG_DWORD, &pv.timerToHide, sizeof(pv.timerToHide));
 			LogAdd(L"Записано значение таймера: " + std::to_wstring(pv.timerToHide));
 		}
 		RegCloseKey(hKey);
@@ -728,9 +735,9 @@ void SetZeroModKeysState(BYTE* keyState) {
 	keyState[91] = 0;
 }
 void RegHotKey(UINT mod, UINT other, int id) {
-	//UnregisterHotKey(pv.settHK, id);
-	//RegisterHotKey(pv.settHK, id, mod, other);
-	OutputDebugStringW(L"Новое сочетание записано");
+	UnregisterHotKey(pv.settHK, id);
+	RegisterHotKey(pv.settHK, id, mod, other);
+	SaveHotKeys();
 }
 std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 	std::wstring result;//
@@ -796,4 +803,81 @@ std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 	if (result.empty())
 		result = PRESSKEYS;
 	return result;
+}
+void SaveHotKeys() {
+	HKEY hKey;
+	if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+		RegSetKeyValueW(hKey, NULL, HOTKEYM, REG_NONE, &pv.hk.modKey, sizeof(pv.hk.modKey));
+		RegSetKeyValueW(hKey, NULL, HOTKEYVK, REG_NONE, &pv.hk.otherKey, sizeof(pv.hk.otherKey));
+		LogAdd(std::wstring(L"Новое сочетание записано: ") + pv.hk.nameArr);
+		RegCloseKey(hKey);
+	}
+}
+void ReadHotKeys() {
+	HKEY hKey;
+	DWORD size1 = sizeof(pv.hk.modKey);
+	DWORD size2 = sizeof(pv.hk.otherKey);
+	pv.hk.modKey = MOD_CONTROL | MOD_ALT;
+	pv.hk.otherKey = 'H';
+	bool a = false, b = false;
+	if (RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+		if (RegQueryValueExW(hKey, HOTKEYM, NULL, NULL, (BYTE*)&pv.hk.modKey, &size1) != ERROR_SUCCESS) {
+			LogAdd(L"Значение HOTKEYM отсутствует, используем стандартное: " + std::to_wstring(pv.hk.modKey));
+			a = true;
+		}
+		if (RegQueryValueExW(hKey, HOTKEYVK, NULL, NULL, (BYTE*)&pv.hk.otherKey, &size2) != ERROR_SUCCESS) {
+			LogAdd(L"Значение HOTKEYVK отсутствует, используем стандартное: " + std::to_wstring(pv.hk.otherKey));
+			b = true;
+		}
+		RegCloseKey(hKey);
+		RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL);
+		if (a)
+			RegSetKeyValueW(hKey, NULL, HOTKEYM, REG_NONE, &pv.hk.modKey, sizeof(pv.hk.modKey));
+		if (b)
+			RegSetKeyValueW(hKey, NULL, HOTKEYVK, REG_NONE, &pv.hk.otherKey, sizeof(pv.hk.otherKey));
+		RegCloseKey(hKey);
+	} else {
+		LogAdd(L"Не удалось найти настройки горячих клавиш, используем стандартные настройки");
+	}
+	pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
+}
+void AddTrayIcon(HWND hwnd) {
+	static bool count = 0;
+	while (!FindWindowW(L"Shell_TrayWnd", NULL)) {
+		Sleep(100);
+	}
+	NOTIFYICONDATA nid = {};
+	nid.cbSize = sizeof(NOTIFYICONDATA);
+	nid.hWnd = hwnd;
+	nid.uID = 1;
+	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+	nid.uCallbackMessage = TRAY_ICON_MESSAGE;
+	nid.hIcon = LoadIcon(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
+	if (!nid.hIcon) LogAdd(L"Ошибка загрузки иконки");
+	wcscpy_s(nid.szTip, SZ_TIP);
+	if (Shell_NotifyIconW(NIM_ADD, &nid)) {
+		LogAdd(L"Иконка создана");
+	} else if (!count) {
+		LogAdd(L"Первая попытка добавить иконку не удалась, жду TaskbarCreated...");
+		count = 1;
+	} else {
+		DWORD err = GetLastError();
+		wchar_t buf[64];
+		swprintf_s(buf, L"Ошибка создания иконки: 0x%08X", static_cast<UINT>(err));
+		LogAdd(buf);
+	}
+}
+void RemoveTrayIcon(HWND hwnd) {
+	NOTIFYICONDATA nid = {};
+	nid.cbSize = sizeof(NOTIFYICONDATA);
+	nid.hWnd = hwnd;
+	nid.uID = 1;
+	if (Shell_NotifyIconW(NIM_DELETE, &nid)) {
+		LogAdd(L"Иконка успешно удалена");
+	} else {
+		DWORD err = GetLastError();
+		wchar_t buf[64];
+		swprintf_s(buf, L"Ошибка удаления иконки: 0x%08X", static_cast<UINT>(err));
+		LogAdd(buf);
+	}
 }
