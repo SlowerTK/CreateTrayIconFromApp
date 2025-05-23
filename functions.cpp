@@ -3,7 +3,7 @@
 std::vector<HiddenWindow> hiddenWindows = {};
 std::vector<HiddenWindow> favoriteWindows = {};
 ProgramVariable pv = {0};
-WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
+LPCWSTR RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
 	WNDCLASS wc;
 	ZeroMemory(&wc, sizeof(wc));
 	wc.lpszClassName = className;
@@ -12,7 +12,7 @@ WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
 	wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wc.hCursor = (HCURSOR)LoadImage(NULL, IDC_ARROW, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
 	RegisterClass(&wc);
-	return wc;
+	return wc.lpszClassName;
 }
 bool isRunAsAdmin() {
 	BOOL isAdmin = FALSE;
@@ -40,7 +40,7 @@ void DebugModCheck(wchar_t* lpCmdLine) {
 }
 void OpenSettings() {
 	if (!pv.settWin)
-		pv.settWin = CreateWindowExW(NULL, pv.wc2.lpszClassName, pv.isAdminMode ? pv.wc2.lpszClassName : WND_TITLE, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
+		pv.settWin = CreateWindowExW(NULL, pv.wc2, pv.isAdminMode ? pv.wc2 : WND_TITLE, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
 									 (GetSystemMetrics(SM_CXSCREEN) - wndX) >> 1, (GetSystemMetrics(SM_CYSCREEN) - wndY) >> 1, wndX, wndY, 0, 0, pv.hInstance, 0);
 	else SetForegroundWindow(pv.settWin);
 }
@@ -673,7 +673,9 @@ void CreateHKSettWnd() {
 		int cy = 300;
 		int x = rect.left + ((rect.right - rect.left) >> 1) - (cx >> 1);
 		int y = rect.top + ((rect.bottom - rect.top) >> 1) - (cy >> 1);
-		pv.settHK = CreateWindowExW(NULL, pv.wc3.lpszClassName, L"Введите новое сочетание клавиш", WS_CHILD | WS_POPUP | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
+		pv.settHK = CreateWindowExW(NULL, pv.wc3, L"Введите новое сочетание клавиш", WS_SYSMENU | WS_POPUP | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
+		//SetWindowLongPtr(pv.settHK, GWLP_HWNDPARENT, (LONG_PTR)pv.settWin);
+		SetForegroundWindow(pv.settHK);
 	}
 }
 void LoadNumberFromRegistry() {
@@ -735,9 +737,9 @@ void SetZeroModKeysState(BYTE* keyState) {
 	keyState[91] = 0;
 }
 void RegHotKey(UINT mod, UINT other, int id) {
-	UnregisterHotKey(pv.settHK, id);
-	RegisterHotKey(pv.settHK, id, mod, other);
-	SaveHotKeys();
+	UnregisterHotKey(pv.trayWnd, id);
+	RegisterHotKey(pv.trayWnd, id, mod, other);
+	SaveHotKeys(mod, other);
 }
 std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 	std::wstring result;//
@@ -804,11 +806,11 @@ std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 		result = PRESSKEYS;
 	return result;
 }
-void SaveHotKeys() {
+void SaveHotKeys(UINT mod, UINT other) {
 	HKEY hKey;
 	if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-		RegSetKeyValueW(hKey, NULL, HOTKEYM, REG_NONE, &pv.hk.modKey, sizeof(pv.hk.modKey));
-		RegSetKeyValueW(hKey, NULL, HOTKEYVK, REG_NONE, &pv.hk.otherKey, sizeof(pv.hk.otherKey));
+		RegSetKeyValueW(hKey, NULL, HOTKEYM, REG_NONE, &mod, sizeof(mod));
+		RegSetKeyValueW(hKey, NULL, HOTKEYVK, REG_NONE, &other, sizeof(other));
 		LogAdd(std::wstring(L"Новое сочетание записано: ") + pv.hk.nameArr);
 		RegCloseKey(hKey);
 	}
@@ -821,11 +823,11 @@ void ReadHotKeys() {
 	pv.hk.otherKey = 'H';
 	bool a = false, b = false;
 	if (RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-		if (RegQueryValueExW(hKey, HOTKEYM, NULL, NULL, (BYTE*)&pv.hk.modKey, &size1) != ERROR_SUCCESS) {
+		if (RegQueryValueExW(hKey, HOTKEYM, NULL, REG_NONE, (BYTE*)&pv.hk.modKey, &size1) != ERROR_SUCCESS) {
 			LogAdd(L"Значение HOTKEYM отсутствует, используем стандартное: " + std::to_wstring(pv.hk.modKey));
 			a = true;
 		}
-		if (RegQueryValueExW(hKey, HOTKEYVK, NULL, NULL, (BYTE*)&pv.hk.otherKey, &size2) != ERROR_SUCCESS) {
+		if (RegQueryValueExW(hKey, HOTKEYVK, NULL, REG_NONE, (BYTE*)&pv.hk.otherKey, &size2) != ERROR_SUCCESS) {
 			LogAdd(L"Значение HOTKEYVK отсутствует, используем стандартное: " + std::to_wstring(pv.hk.otherKey));
 			b = true;
 		}

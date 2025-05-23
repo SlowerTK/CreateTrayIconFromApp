@@ -25,13 +25,13 @@ processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 struct HotKeys {
 	std::wstring nameArr;
-	byte modKey, otherKey;
+	byte modKey, otherKey, newModKey, newOtherKey;
 	bool canSet, isFixed, isActive;
 	RECT textRect;
 };
 struct ProgramVariable {
 	HWND trayWnd, settWin, settHK;
-	WNDCLASS wc1, wc2, wc3;
+	LPCWSTR wc1, wc2, wc3;
 	HINSTANCE hInstance;
 	HMENU hMenu, hSettMenu, hSettSubMenu;
 	HWND hAppText, hApplicationsList, hFavoritesList, hAddButton, hRemoveButton,
@@ -78,7 +78,7 @@ static std::wstring exceptionClassNames[] = {
 	L"CTIFA Timer Settings"
 };
 
-WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc);
+LPCWSTR RegisterNewClass(LPCWSTR className, WNDPROC wndproc);
 bool isRunAsAdmin();
 void DebugModCheck(wchar_t* lpCmdLine);
 static HBITMAP IconToBitmap(HICON hIcon);
@@ -118,7 +118,7 @@ void SetZeroModKeysState();
 void SetZeroModKeysState(BYTE* keyState);
 void RegHotKey(UINT mod, UINT other, int id);
 std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey);
-void SaveHotKeys();
+void SaveHotKeys(UINT mod, UINT other);
 void ReadHotKeys();
 void AddTrayIcon(HWND hwnd);
 void RemoveTrayIcon(HWND hwnd);

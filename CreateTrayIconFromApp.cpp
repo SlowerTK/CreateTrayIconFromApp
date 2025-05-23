@@ -50,6 +50,8 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 				pv.hk.isFixed = 1;
 				if (pv.hk.canSet = RegisterHotKey(pv.settHK, 0, pv.hk.modKey, pv.hk.otherKey)) {
 					pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
+					pv.hk.newModKey = pv.hk.modKey;
+					pv.hk.newOtherKey = pv.hk.otherKey;
 					//OutputDebugStringW((std::wstring(L"Подходящие сочетание ") + pv.hk.nameArr + L"\n").c_str());
 					UnregisterHotKey(pv.settHK, 0);
 				}
@@ -172,7 +174,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case ID_OK_BUTTON:
-			RegHotKey(pv.hk.modKey, pv.hk.otherKey, HK_CTIFA_ID);
+			RegHotKey(pv.hk.newModKey, pv.hk.newOtherKey, HK_CTIFA_ID);
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
 			break;
@@ -195,18 +197,30 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_SETFOCUS:
 		pv.hk.isActive = true;
 		return 0;
+	//case WM_NCCALCSIZE:
+	//	return 0;
+	case WM_NCHITTEST:
+		return HTCAPTION;
+	//case WM_ACTIVATE:
+	//	if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) {
+	//		if (IsWindow(pv.settHK)) {
+	//			SetForegroundWindow(pv.settHK);
+	//			SetFocus(pv.settHK);
+	//		}
+	//	}
+	//	break;
 	case WM_DESTROY:
 		if (pv.hHook) UnhookWindowsHookEx(pv.hHook);
 		EnableWindow(pv.settWin/*parent*/, TRUE);
-		SetForegroundWindow(pv.settWin/*parent*/);
+		SetWindowTextW(pv.hHotKeys, pv.hk.nameArr.c_str());
+		SetActiveWindow(pv.settWin);
+		//SetForegroundWindow(pv.settWin/*parent*/);
 		pv.settHK = NULL;
 		break;
 	default:
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
 	return 0;
-
-
 }
 
 static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -292,6 +306,9 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		SetBkMode(hdcStatic, TRANSPARENT);
 		return (LRESULT)GetStockObject(WHITE_PEN);
 	}
+	//case WM_PAINT:
+
+	//	break;
 	case WM_SIZE: {
 		int width = LOWORD(lParam);
 		int height = HIWORD(lParam);
@@ -389,8 +406,17 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		case ID_BUTTON_HK:
 			EnableWindow(hwnd, FALSE);
 			CreateHKSettWnd();
+			break;
 		}
 		break;
+	//case WM_ACTIVATE:
+	//	if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) {
+	//		if (IsWindow(pv.settHK)) {
+	//			SetForegroundWindow(pv.settHK);
+	//			SetFocus(pv.settHK);
+	//		}
+	//	}
+	//	break;
 	case WM_CLOSE:
 		CollapseToTrayFromFavorite();
 		CheckFolderAndFile(FILEPATHNAME);
@@ -528,7 +554,7 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	pv.wc1 = RegisterNewClass(L"CTRIFATrayApp", TrayProc);
 	pv.wc2 = RegisterNewClass(L"CTIFA Settings", SettingsProc);
 	pv.wc3 = RegisterNewClass(L"CTIFA Timer Settings", HKSettProc);
-	pv.trayWnd = CreateWindowExW(0, pv.wc1.lpszClassName, pv.wc1.lpszClassName, NULL, NULL, NULL, NULL, NULL, NULL, NULL, pv.hInstance, NULL);
+	pv.trayWnd = CreateWindowExW(0, pv.wc1, pv.wc1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, pv.hInstance, NULL);
 
 	ReadHotKeys();
 	bool isCanCTIFA = RegisterHotKey(pv.trayWnd, HK_CTIFA_ID, pv.hk.modKey, pv.hk.otherKey);
@@ -536,9 +562,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		MBERROR(ET_HOTKEY);
 		LogAdd(ET_HOTKEY);
 		UnregisterHotKey(pv.trayWnd, HK_CTIFA_ID);
-		ReleaseMutex(pv.hMutex);
-		CloseHandle(pv.hMutex);
-		return -1;
+		//ReleaseMutex(pv.hMutex);
+		//CloseHandle(pv.hMutex);
+		//return -1;
 	}
 	AddTrayIcon(pv.trayWnd);
 	{
@@ -558,8 +584,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
 	RemoveTrayIcon(pv.trayWnd);
 	UnregisterHotKey(pv.trayWnd, HK_CTIFA_ID);
-	UnregisterClass(pv.wc1.lpszClassName, pv.wc1.hInstance);
-	UnregisterClass(pv.wc2.lpszClassName, pv.wc2.hInstance);
+	UnregisterClass(pv.wc1, pv.hInstance);
+	UnregisterClass(pv.wc2, pv.hInstance);
+	UnregisterClass(pv.wc3, pv.hInstance);
 	ReleaseMutex(pv.hMutex);
 	CloseHandle(pv.hMutex);
 	LogAdd(L"Завершение работы\n");
