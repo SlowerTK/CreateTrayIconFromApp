@@ -170,6 +170,23 @@ static std::wstring GetProcessCommandLine(DWORD processID) {
 
 	return commandLine;
 }
+int GetMaxTextWidth(HWND hwndListBox) {
+	HDC hdc = GetDC(hwndListBox);
+	HFONT hOldFont = (HFONT)SelectObject(hdc, pv.hFont);
+	int count = (int)SendMessage(hwndListBox, LB_GETCOUNT, 0, 0);
+	SIZE sz = { 0 };
+	int maxWidth = 0;
+	for (int i = 0; i < count; ++i) {
+		wchar_t buffer[1024]{};
+		SendMessage(hwndListBox, LB_GETTEXT, i, (LPARAM)buffer);
+		GetTextExtentPoint32W(hdc, buffer, lstrlenW(buffer), &sz);
+		if (sz.cx > maxWidth)
+			maxWidth = sz.cx;
+	}
+	SelectObject(hdc, hOldFont);
+	ReleaseDC(hwndListBox, hdc);
+	return maxWidth;
+}
 static BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
 	HWND hApplicationsList = (HWND)lParam;
 	wchar_t windowTitle[MAX_PATH] = {0};
@@ -207,6 +224,8 @@ void UpdateApplicationsList() {
 		return;
 	DeleteList(pv.hApplicationsList);
 	EnumWindows(EnumWindowsUpdateAppListProc, (LPARAM)pv.hApplicationsList);
+
+	SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hApplicationsList) + 10, 0);
 }
 void UpdateFavoriteList() {
 	if (!pv.hFavoritesList)
@@ -218,6 +237,7 @@ void UpdateFavoriteList() {
 		int index = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)hw.windowTitle.c_str());
 		SendMessage(pv.hFavoritesList, LB_SETITEMDATA, index, (LPARAM)HW);
 	}
+	SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hFavoritesList) + 10, 0);
 }
 static HICON GetIcon(HWND hwnd) {
 	HICON hIcon = (HICON)SendMessage(hwnd, WM_GETICON, ICON_SMALL, 0);

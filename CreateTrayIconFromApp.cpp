@@ -256,9 +256,9 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			HWND* hWnd;
 		} controls[] = {
 			{ STATIC,    WND_NAME_TEXT,        NULL,  NULL,  &pv.hAppText },
-			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_APPLICATIONS), &pv.hApplicationsList },
+			{ LISTBOX,   NULL,                 WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_APPLICATIONS), &pv.hApplicationsList },
 			{ STATIC,    WND_NAME_TEXT2,       NULL,  NULL,  &pv.hFavText },
-			{ LISTBOX,   NULL,                 WS_BORDER | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_FAVORITES), &pv.hFavoritesList },
+			{ LISTBOX,   NULL,                 WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_FAVORITES), &pv.hFavoritesList },
 			{ BUTTON,    ADDBUTTON_TEXT,       BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_ADD), &pv.hAddButton },
 			{ BUTTON,    REMOVEBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_REMOVE), &pv.hRemoveButton },
 			{ BUTTON,    RELOADBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_RELOAD), &pv.hReloadButton },
@@ -272,7 +272,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		};
 
 		for (auto& ctrl : controls) {
-			HWND hWnd = CreateWindow(ctrl.className, ctrl.text, ctrl.style | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hwnd, ctrl.id, pv.hInstance, NULL);
+			HWND hWnd = CreateWindowW(ctrl.className, ctrl.text, ctrl.style | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hwnd, ctrl.id, pv.hInstance, NULL);
 			SendMessage(hWnd, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 			*ctrl.hWnd = hWnd;
 		}
@@ -359,6 +359,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				int i = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)HW->windowTitle.c_str());
 				SendMessage(pv.hFavoritesList, LB_SETITEMDATA, i, (LPARAM)HW);
 				SendMessage(pv.hApplicationsList, LB_DELETESTRING, sel, NULL);
+				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hFavoritesList) + 10, 0);
+				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hApplicationsList) + 10, 0);
 			}
 			break;
 		}
@@ -373,6 +375,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				eraseWindow(favoriteWindows);
 				eraseWindow(hiddenWindows);
 				SendMessage(pv.hFavoritesList, LB_DELETESTRING, sel, NULL);
+				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hApplicationsList) + 10, 0);
+				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hFavoritesList) + 10, 0);
 				ShowWindow(HW->hwnd, SW_SHOW);
 				SetFocus(hwnd);
 				delete HW;

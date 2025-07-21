@@ -85,6 +85,7 @@ static HBITMAP IconToBitmap(HICON hIcon);
 void OpenSettings();
 void UpdateTrayMenu(bool isDebug);
 void CloseApp();
+int GetMaxTextWidth(HWND hwndListBox);
 void UpdateApplicationsList();
 void UpdateFavoriteList();
 void CollapseToTray(HWND hwnd, HiddenWindow* HW = nullptr);
