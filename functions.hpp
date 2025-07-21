@@ -118,7 +118,7 @@ void SetZeroModKeysState();
 void SetZeroModKeysState(BYTE* keyState);
 void RegHotKey(UINT mod, UINT other, int id);
 std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey);
-void SaveHotKeys(UINT mod, UINT other);
+void SaveHotKeys(byte mod, byte other);
 void ReadHotKeys();
 void AddTrayIcon(HWND hwnd);
 void RemoveTrayIcon(HWND hwnd);

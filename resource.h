@@ -50,7 +50,7 @@ constexpr auto HOTKEYVK = L"Keys";
 constexpr auto HINT_MSG = L"Если пункт «Скрывать восстановленные избранные» выключен, то избранные окна будут скрываться только при создании. Если нужно восстановить только одно окно, чтоб оно не скрывалось, можно при выборе окна зажать клавишу `Shift`. \nИначе восстановленное окно будет скрыто через выбранное количество миллисекунд.";
 constexpr auto PRESSKEYS = L"Нажмите клавиши";
 //
-constexpr auto SECOND = 5'000;
+constexpr unsigned int SECOND = 5'000;
 constexpr auto HK_CTIFA_ID = 1;
 constexpr auto TIMER_ID = 1;
 constexpr auto TB_SETTINGS = 1;

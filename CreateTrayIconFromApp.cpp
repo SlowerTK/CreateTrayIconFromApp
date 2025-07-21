@@ -510,7 +510,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			PostMessage(hwnd, WM_NULL, NULL, NULL);
 		}
 						 break;
-		case WM_LBUTTONDBLCLK:
+		case WM_LBUTTONUP:
 			OpenSettings();
 			break;
 		default:
@@ -584,9 +584,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
 	RemoveTrayIcon(pv.trayWnd);
 	UnregisterHotKey(pv.trayWnd, HK_CTIFA_ID);
-	UnregisterClass(pv.wc1, pv.hInstance);
-	UnregisterClass(pv.wc2, pv.hInstance);
-	UnregisterClass(pv.wc3, pv.hInstance);
+	UnregisterClassW(pv.wc1, pv.hInstance);
+	UnregisterClassW(pv.wc2, pv.hInstance);
+	UnregisterClassW(pv.wc3, pv.hInstance);
 	ReleaseMutex(pv.hMutex);
 	CloseHandle(pv.hMutex);
 	LogAdd(L"Завершение работы\n");

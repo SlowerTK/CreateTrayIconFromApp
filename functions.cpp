@@ -492,11 +492,17 @@ static std::wstring GetTime() {
 		<< std::setw(2) << std::setfill(L'0') << tm.tm_sec;
 	return wss.str();
 }
+#ifdef DEBUG
+void LogAdd(std::wstring&& content) {
+	OutputDebugStringW((content + L"\n").c_str());
+}
+#else
 void LogAdd(std::wstring&& content) {
 	std::wstring currentLogFile = L"\\" + GetCurrentDate() + L".log";
 	CheckFolderAndFile(currentLogFile);
 	WriteMyFile(currentLogFile, L"[" + GetTime() + L"]\t" + content + L"\n", true);
 }
+#endif // DEBUG
 bool InitializeTaskService(CComPtr<ITaskService>& pService) {
 	HRESULT hr = pService.CoCreateInstance(CLSID_TaskScheduler, NULL, CLSCTX_INPROC_SERVER);
 	if (FAILED(hr)) {
@@ -678,45 +684,55 @@ void CreateHKSettWnd() {
 		SetForegroundWindow(pv.settHK);
 	}
 }
-void LoadNumberFromRegistry() {
+template<typename T>
+static bool WriteRegistryValue(HKEY root, const wchar_t* subkey, const wchar_t* valueName, DWORD type, const T& data) {
 	HKEY hKey;
-	DWORD size1 = sizeof(pv.isHideOn);
-	DWORD size2 = sizeof(pv.timerToHide);
-	pv.isHideOn = true;
-	pv.timerToHide = SECOND;
-	bool a=false, b=false;
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-		if (RegQueryValueExW(hKey, KEY1, NULL, NULL, (BYTE*)&pv.isHideOn, &size1) != ERROR_SUCCESS) {
-			LogAdd(L"Значение KEY1 отсутствует, используем стандартное: " + std::to_wstring(pv.isHideOn));
-			a = true;
-		}
-		if (RegQueryValueExW(hKey, KEY2, NULL, NULL, (BYTE*)&pv.timerToHide, &size2) != ERROR_SUCCESS) {
-			LogAdd(L"Значение KEY2 отсутствует, используем стандартное: " + std::to_wstring(pv.timerToHide));
-			b = true;
-		}
-		RegCloseKey(hKey);
-		RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL);
-		if (a)
-			RegSetKeyValueW(hKey, NULL, KEY1, REG_BINARY, &pv.isHideOn, sizeof(pv.isHideOn));
-		if (b)
-			RegSetKeyValueW(hKey, NULL, KEY2, REG_DWORD, &pv.timerToHide, sizeof(pv.timerToHide));
-		RegCloseKey(hKey);
-	} else {
-		LogAdd(L"Ключ не найден, используем стандартные настройки");
-	}
+	if (RegCreateKeyExW(root, subkey, 0, 0, 0, KEY_WRITE, 0, &hKey, 0) != ERROR_SUCCESS)
+		return false;
+
+	bool result = RegSetValueExW(hKey, valueName, 0, type, reinterpret_cast<const BYTE*>(&data), sizeof(T)) == ERROR_SUCCESS;
+	RegCloseKey(hKey);
+	return result;
 }
-void SaveToRegistry(bool a, bool b) {
+template<typename T>
+static bool ReadRegistryValue(HKEY root, const wchar_t* subkey, const wchar_t* valueName, DWORD expectedType, T& out, T fallback, bool writeFallback = false) {
 	HKEY hKey;
-	if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-		if (a) {
-			RegSetKeyValueW(hKey, NULL, KEY1, REG_BINARY, &pv.isHideOn, sizeof(pv.isHideOn));
-			LogAdd(std::wstring(L"Таймер ") + ((pv.isHideOn) ? L"включён" : L"выключен"));
-		}
-		if (b) {
-			RegSetKeyValueW(hKey, NULL, KEY2, REG_DWORD, &pv.timerToHide, sizeof(pv.timerToHide));
-			LogAdd(L"Записано значение таймера: " + std::to_wstring(pv.timerToHide));
-		}
-		RegCloseKey(hKey);
+	DWORD size = sizeof(T);
+	DWORD type = 0;
+	if (RegOpenKeyExW(root, subkey, 0, KEY_READ, &hKey) != ERROR_SUCCESS) {
+		out = fallback;
+		return false;
+	}
+
+	LONG status = RegQueryValueExW(hKey, valueName, NULL, &type, reinterpret_cast<BYTE*>(&out), &size);
+	RegCloseKey(hKey);
+
+	if (status != ERROR_SUCCESS || type != expectedType || size != sizeof(T)) {
+		out = fallback;
+		if (writeFallback)
+			WriteRegistryValue(root, subkey, valueName, expectedType, fallback);
+		return false;
+	}
+
+	return true;
+}
+void LoadNumberFromRegistry() {
+	bool a = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY1, REG_BINARY, pv.isHideOn, true, true);
+	bool b = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY2, REG_DWORD, pv.timerToHide, SECOND, true);
+
+	if (a)
+		LogAdd(L"Значение KEY1 отсутствует, используем стандартное: " + std::to_wstring(pv.isHideOn));
+	if (b)
+		LogAdd(L"Значение KEY2 отсутствует, используем стандартное: " + std::to_wstring(pv.timerToHide));
+}
+void SaveToRegistry(bool writeHideOn, bool writeTimer) {
+	if (writeHideOn) {
+		WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY1, REG_BINARY, pv.isHideOn);
+		LogAdd(std::wstring(L"Таймер ") + (pv.isHideOn ? L"включён" : L"выключен"));
+	}
+	if (writeTimer) {
+		WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY2, REG_DWORD, pv.timerToHide);
+		LogAdd(L"Записано значение таймера: " + std::to_wstring(pv.timerToHide));
 	}
 }
 void SetZeroModKeysState() {
@@ -806,41 +822,23 @@ std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 		result = PRESSKEYS;
 	return result;
 }
-void SaveHotKeys(UINT mod, UINT other) {
-	HKEY hKey;
-	if (RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-		RegSetKeyValueW(hKey, NULL, HOTKEYM, REG_NONE, &mod, sizeof(mod));
-		RegSetKeyValueW(hKey, NULL, HOTKEYVK, REG_NONE, &other, sizeof(other));
-		LogAdd(std::wstring(L"Новое сочетание записано: ") + pv.hk.nameArr);
-		RegCloseKey(hKey);
-	}
+void SaveHotKeys(byte mod, byte other) {
+	WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYM, REG_DWORD, mod);
+	WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYVK, REG_DWORD, other);
+	LogAdd(std::wstring(L"Новое сочетание записано: ") + pv.hk.nameArr);
 }
 void ReadHotKeys() {
-	HKEY hKey;
-	DWORD size1 = sizeof(pv.hk.modKey);
-	DWORD size2 = sizeof(pv.hk.otherKey);
-	pv.hk.modKey = MOD_CONTROL | MOD_ALT;
-	pv.hk.otherKey = 'H';
-	bool a = false, b = false;
-	if (RegOpenKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-		if (RegQueryValueExW(hKey, HOTKEYM, NULL, REG_NONE, (BYTE*)&pv.hk.modKey, &size1) != ERROR_SUCCESS) {
-			LogAdd(L"Значение HOTKEYM отсутствует, используем стандартное: " + std::to_wstring(pv.hk.modKey));
-			a = true;
-		}
-		if (RegQueryValueExW(hKey, HOTKEYVK, NULL, REG_NONE, (BYTE*)&pv.hk.otherKey, &size2) != ERROR_SUCCESS) {
-			LogAdd(L"Значение HOTKEYVK отсутствует, используем стандартное: " + std::to_wstring(pv.hk.otherKey));
-			b = true;
-		}
-		RegCloseKey(hKey);
-		RegCreateKeyExW(HKEY_CURRENT_USER, REG_PATH, 0, NULL, 0, KEY_WRITE, NULL, &hKey, NULL);
-		if (a)
-			RegSetKeyValueW(hKey, NULL, HOTKEYM, REG_NONE, &pv.hk.modKey, sizeof(pv.hk.modKey));
-		if (b)
-			RegSetKeyValueW(hKey, NULL, HOTKEYVK, REG_NONE, &pv.hk.otherKey, sizeof(pv.hk.otherKey));
-		RegCloseKey(hKey);
-	} else {
-		LogAdd(L"Не удалось найти настройки горячих клавиш, используем стандартные настройки");
-	}
+	const byte defMod = MOD_CONTROL | MOD_ALT;
+	const byte defKey = 'H';
+
+	bool a = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYM, REG_DWORD, pv.hk.modKey, defMod, true);
+	bool b = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYVK, REG_DWORD, pv.hk.otherKey, defKey, true);
+
+	if (a)
+		LogAdd(L"Значение HOTKEYM отсутствует, используем стандартное: " + std::to_wstring(pv.hk.modKey));
+	if (b)
+		LogAdd(L"Значение HOTKEYVK отсутствует, используем стандартное: " + std::to_wstring(pv.hk.otherKey));
+
 	pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
 }
 void AddTrayIcon(HWND hwnd) {
