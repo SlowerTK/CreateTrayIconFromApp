@@ -33,15 +33,15 @@ void DebugModCheck(wchar_t* lpCmdLine) {
 	wchar_t** cmdArpvLine;
 	if (cmdArpvLine = CommandLineToArgvW(lpCmdLine, &argsCount))
 		for (int i = 0; i != argsCount; i++)
-			if (!lstrcmpW(cmdArpvLine[i], DEBUG_STRING)) {
+			if (!lstrcmpW(cmdArpvLine[i], SY_DEBUG_ARG)) {
 				pv.isDebugMode = true;
 				break;
 			}
 }
 void OpenSettings() {
 	if (!pv.settWin)
-		pv.settWin = CreateWindowExW(NULL, pv.wc2, pv.isAdminMode ? pv.wc2 : WND_TITLE, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
-									 (GetSystemMetrics(SM_CXSCREEN) - wndX) >> 1, (GetSystemMetrics(SM_CYSCREEN) - wndY) >> 1, wndX, wndY, 0, 0, pv.hInstance, 0);
+		pv.settWin = CreateWindowExW(NULL, pv.wc2, pv.isAdminMode ? pv.wc2 : TX_UI_TITLE, WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX | WS_VISIBLE,
+									 (GetSystemMetrics(SM_CXSCREEN) - CONST_WND_WIDTH) >> 1, (GetSystemMetrics(SM_CYSCREEN) - CONST_WND_HEIGHT) >> 1, CONST_WND_WIDTH, CONST_WND_HEIGHT, 0, 0, pv.hInstance, 0);
 	else SetForegroundWindow(pv.settWin);
 }
 static HBITMAP IconToBitmap(HICON hIcon) {
@@ -76,10 +76,10 @@ void UpdateTrayMenu(bool isDebug) {
 		++it;
 	}
 	if (!hiddenWindows.empty()) AppendMenu(pv.hMenu, MF_SEPARATOR, NULL, NULL);
-	if (pv.isAdminMode) AppendMenu(pv.hMenu, MF_STRING | MF_DISABLED, TB_RESTART, TB_HOTKEY_TEXT);
-	else AppendMenu(pv.hMenu, MF_STRING, TB_RESTART, NEED_ADMIN_RIGHTS);
-	AppendMenu(pv.hMenu, MF_STRING, TB_SETTINGS, TB_SETTINGS_TEXT);
-	AppendMenu(pv.hMenu, MF_STRING, TB_EXIT, TB_EXIT_TEXT);
+	if (pv.isAdminMode) AppendMenu(pv.hMenu, MF_STRING | MF_DISABLED, ID_TRAY_RESTART, pv.hk.nameArr.c_str());
+	else AppendMenu(pv.hMenu, MF_STRING, ID_TRAY_RESTART, TX_ADMIN_RESTART);
+	AppendMenu(pv.hMenu, MF_STRING, ID_TRAY_SETTINGS, TX_TRAY_BTN_SETTINGS);
+	AppendMenu(pv.hMenu, MF_STRING, ID_TRAY_EXIT, TX_TRAY_BTN_EXIT);
 }
 void CloseApp() {
 	for (const auto& hiddenWindow : hiddenWindows) {
@@ -94,23 +94,23 @@ void CloseApp() {
 static std::wstring GetProcessCommandLine(DWORD processID) {
 	HRESULT hres = CoInitializeEx(0, COINIT_MULTITHREADED);
 	if (FAILED(hres)) {
-		LogAdd(L"Ошибка инициализации COM");
-		return L"";
+		LogAdd(ET_COM_INIT);
+		return{};
 	}
 	hres = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT,
 								RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
 	if (FAILED(hres)) {
 		CoUninitialize();
-		LogAdd(L"Ошибка настройки безопасности COM");
-		return L"";
+		LogAdd(ET_COM_SECURITY);
+		return{};
 	}
 
 	IWbemLocator* pLoc = NULL;
 	hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLoc);
 	if (FAILED(hres)) {
 		CoUninitialize();
-		LogAdd(L"Не удалось создать WMI-локатор");
-		return L"";
+		LogAdd(ET_WMI_CREATE);
+		return{};
 	}
 
 	IWbemServices* pSvc = NULL;
@@ -118,49 +118,49 @@ static std::wstring GetProcessCommandLine(DWORD processID) {
 	if (FAILED(hres)) {
 		pLoc->Release();
 		CoUninitialize();
-		LogAdd(L"Не удалось подключиться к WMI");
-		return L"";
+		LogAdd(ET_WMI_CONNECT);
+		return{};
 	}
 
-	hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, NULL, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE);
+	hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, 0, 0, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, 0, EOAC_NONE);
 	if (FAILED(hres)) {
 		pSvc->Release();
 		pLoc->Release();
 		CoUninitialize();
-		LogAdd(L"Не удалось установить параметры безопасности");
-		return L"";
+		LogAdd(ET_WMI_SECURITY);
+		return{};
 	}
 
 	IEnumWbemClassObject* pEnumerator = NULL;
-	std::wstring query = QUERY + std::to_wstring(processID);
+	std::wstring query = L"SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + std::to_wstring(processID);
 
-	hres = pSvc->ExecQuery(bstr_t("WQL"), bstr_t(query.c_str()), WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, NULL, &pEnumerator);
+	hres = pSvc->ExecQuery(_bstr_t("WQL"), _bstr_t(query.c_str()), WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, NULL, &pEnumerator);
 
 	if (FAILED(hres)) {
 		pSvc->Release();
 		pLoc->Release();
 		CoUninitialize();
-		LogAdd(L"Не удалось выполнить запрос WMI");
-		return L"";
+		LogAdd(ET_WMI_QUERY);
+		return{};
 	}
 
 	IWbemClassObject* pClsObj = NULL;
 	ULONG uReturn = 0;
 	VARIANT vtProp{};
 
-	std::wstring commandLine = L"";
+	std::wstring commandLine = {};
 	if (pEnumerator->Next(WBEM_INFINITE, 1, &pClsObj, &uReturn) == S_OK) {
-		hres = pClsObj->Get(L"CommandLine", 0, &vtProp, 0, 0);
+		hres = pClsObj->Get(SY_COMMAND_LINE, 0, &vtProp, 0, 0);
 		if (SUCCEEDED(hres) && vtProp.vt == VT_BSTR) {
 			commandLine = vtProp.bstrVal;
 		} else {
-			LogAdd(ET_COMMANDLINE);
-			commandLine = L"";
+			LogAdd(ET_GET_CMDLINE);
+			commandLine = {};
 		}
 		VariantClear(&vtProp);
 		pClsObj->Release();
 	} else {
-		commandLine = L"";
+		commandLine = {};
 	}
 
 	pEnumerator->Release();
@@ -286,7 +286,7 @@ void CollapseToTrayFromFavorite() {
 				if (std::none_of(favoriteWindows.begin(), favoriteWindows.end(), [HW](const HiddenWindow& hw) { return hw.commandLine == HW->commandLine && hw.hwnd == HW->hwnd; })) {
 					favoriteWindows.push_back(*HW);
 					std::wstring appTittle = HW->windowTitle.c_str();
-					LogAdd(L"В избранное добавлено " + appTittle);
+					LogAdd(IT_FAVORITE_ADDED + appTittle);
 				}
 				CollapseToTray(HW->hwnd, HW);
 			}
@@ -309,7 +309,7 @@ std::wstring GetWstringClassName(HWND hwnd) {
 	GetClassNameW(hwnd, classNam, SIZEOF(classNam));
 	for (const auto& t : exceptionClassNames) {
 		if (lstrcmpW(classNam, t.c_str()) == 0)
-			return L"";
+			return{};
 	}
 	return classNam;
 }
@@ -319,7 +319,7 @@ DWORD GetProcessId(HWND hwnd) {
 	return processID;
 }
 std::wstring GetAllowedProcessName(DWORD processID) {
-	std::wstring processName = L"";
+	std::wstring processName = {};
 	wchar_t processNam[MAX_PATH] = {0};
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
 	if (hProcess) {
@@ -332,26 +332,26 @@ std::wstring GetAllowedProcessName(DWORD processID) {
 	}
 	for (const auto& t : exceptionProcessNames) {
 		if (t == processName)
-			return L"";
+			return{};
 	}
 	return processName;
 }
 void CheckFolderAndFile(const std::wstring& fileName) {
 	PWSTR appDataPath;
 	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
-		MBATTENTION(ET_APPDATA);
+		MBATTENTION(ET_GET_APPDATA);
 		return;
 	}
-	std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
+	std::wstring folderPath = std::wstring(appDataPath) + SY_FOLDER_NAME;
 	if (!CreateDirectory(folderPath.c_str(), NULL) && GetLastError() != ERROR_ALREADY_EXISTS) {
-		MBATTENTION(ET_CREATEFOLDER);
+		MBATTENTION(ET_CREATE_FOLDER);
 		return;
 	}
 	std::wstring filePath = folderPath + fileName;
 	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, NULL, NULL, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		if (GetLastError() != ERROR_FILE_EXISTS) {
-			MBATTENTION(ET_CREATEFILE);
+			MBATTENTION(ET_CREATE_FILE);
 		}
 	} else {
 		CloseHandle(hFile);
@@ -360,27 +360,27 @@ void CheckFolderAndFile(const std::wstring& fileName) {
 std::wstring ReadSettingsFile() {
 	PWSTR appDataPath;
 	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
-		MBATTENTION(ET_APPDATA);
-		return L"";
+		MBATTENTION(ET_GET_APPDATA);
+		return{};
 	}
-	std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + FILEPATHNAME;
+	std::wstring filePath = std::wstring(appDataPath) + SY_FOLDER_NAME + SY_SETTINGS_FILENAME;
 	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		MBATTENTION(ET_FILEOPEN);
-		return L"";
+		MBATTENTION(ET_OPEN_FILE);
+		return{};
 	}
 	LARGE_INTEGER fileSize;
 	if (!GetFileSizeEx(hFile, &fileSize)) {
-		MBATTENTION(ET_FILESIZE);
+		MBATTENTION(ET_FILE_SIZE);
 		CloseHandle(hFile);
-		return L"";
+		return{};
 	}
 	std::wstring content(fileSize.QuadPart, L'\0');
 	DWORD bytesRead;
 	if (!ReadFile(hFile, &content[0], (DWORD)fileSize.QuadPart, &bytesRead, NULL) || bytesRead != fileSize.QuadPart) {
-		MBATTENTION(ET_FILECONTENT);
+		MBATTENTION(ET_FILE_READ);
 		CloseHandle(hFile);
-		return L"";
+		return{};
 	}
 	CloseHandle(hFile);
 	return content;
@@ -388,19 +388,19 @@ std::wstring ReadSettingsFile() {
 void WriteMyFile(std::wstring fileName, const std::wstring& content, bool isAdd) {
 	PWSTR appDataPath;
 	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
-		MBATTENTION(ET_APPDATA);
+		MBATTENTION(ET_GET_APPDATA);
 		return;
 	}
-	std::wstring filePath = std::wstring(appDataPath) + FOLDERNAME + fileName;
+	std::wstring filePath = std::wstring(appDataPath) + SY_FOLDER_NAME + fileName;
 	HANDLE hFile = CreateFile(filePath.c_str(), GENERIC_WRITE, FILE_SHARE_WRITE, NULL, isAdd ? OPEN_EXISTING : CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
-		MBATTENTION(ET_FILEOPEN);
+		MBATTENTION(ET_OPEN_FILE);
 		return;
 	}
 	if (isAdd) SetFilePointer(hFile, 0, NULL, FILE_END);
 	DWORD bytesWritten;
 	if (!WriteFile(hFile, content.c_str(), static_cast<DWORD>(content.length() * sizeof(wchar_t)), &bytesWritten, NULL))
-		MBATTENTION(ET_FILEWRITE);
+		MBATTENTION(ET_FILE_WRITE);
 	CloseHandle(hFile);
 }
 std::wstring serializeToWstring(const HiddenWindow& hw) {
@@ -424,9 +424,9 @@ void SerchWindow(HiddenWindow& window) {
 	}
 }
 void FindWindowFromFile(HiddenWindow& windowToFind, bool isFromFile) {
-	if (isFromFile) windowToFind.isFavorite = SAVED_WINDOW;
+	if (isFromFile) windowToFind.isFavorite = ID_WND_SAVED_FAVORITES;
 	SerchWindow(windowToFind);
-	if (windowToFind.hwnd && windowToFind.isFavorite == SAVED_WINDOW) {
+	if (windowToFind.hwnd && windowToFind.isFavorite == ID_WND_SAVED_FAVORITES) {
 		windowToFind.isFavorite = true;
 		CollapseToTray(windowToFind.hwnd, &windowToFind);
 	}
@@ -483,13 +483,13 @@ std::wstring GetCurrentDate() {
 void CheckAndDeleteOldLogs(const std::wstring& currentLogFile) {
 	PWSTR appDataPath;
 	if (FAILED(SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, NULL, &appDataPath))) {
-		MBATTENTION(ET_APPDATA);
+		MBATTENTION(ET_GET_APPDATA);
 		return;
 	}
-	std::wstring folderPath = std::wstring(appDataPath) + FOLDERNAME;
+	std::wstring folderPath = std::wstring(appDataPath) + SY_FOLDER_NAME;
 	std::vector<std::pair<std::wstring, FILETIME>> logFiles;
 	WIN32_FIND_DATA findFileData;
-	HANDLE hFind = FindFirstFile((folderPath + L"\\*.log").c_str(), &findFileData);
+	HANDLE hFind = FindFirstFile((folderPath + L"\\*"+ SY_FILE_EXTENSION).c_str(), &findFileData);
 	if (hFind == INVALID_HANDLE_VALUE) return;
 	do {
 		if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && findFileData.cFileName != currentLogFile)
@@ -518,7 +518,7 @@ void LogAdd(std::wstring&& content) {
 }
 #else
 void LogAdd(std::wstring&& content) {
-	std::wstring currentLogFile = L"\\" + GetCurrentDate() + L".log";
+	std::wstring currentLogFile = L"\\" + GetCurrentDate() + SY_FILE_EXTENSION;
 	CheckFolderAndFile(currentLogFile);
 	WriteMyFile(currentLogFile, L"[" + GetTime() + L"]\t" + content + L"\n", true);
 }
@@ -527,7 +527,7 @@ bool InitializeTaskService(CComPtr<ITaskService>& pService) {
 	HRESULT hr = pService.CoCreateInstance(CLSID_TaskScheduler, NULL, CLSCTX_INPROC_SERVER);
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось создать экземпляр TaskService: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_TASKSERVICE_CREATE, static_cast<UINT>(hr));
 		LogAdd(buf);
 		return false;
 	}
@@ -535,7 +535,7 @@ bool InitializeTaskService(CComPtr<ITaskService>& pService) {
 	hr = pService->Connect(_variant_t(), _variant_t(), _variant_t(), _variant_t());
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось подключиться к TaskScheduler: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_TASKSERVICE_CONNECT, static_cast<UINT>(hr));
 		LogAdd(buf);
 		return false;
 	}
@@ -545,7 +545,7 @@ bool GetRootFolder(CComPtr<ITaskService>& pService, CComPtr<ITaskFolder>& pRootF
 	HRESULT hr = pService->GetFolder(_bstr_t(L"\\"), &pRootFolder);
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось получить доступ к корневой папке: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_TASK_ROOT_ACCESS, static_cast<UINT>(hr));
 		LogAdd(buf);
 		return false;
 	}
@@ -555,27 +555,27 @@ bool IsTaskScheduled(const std::wstring& taskName) {
 	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось выполнить CoInitializeEx: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_COINIT_EX, static_cast<UINT>(hr));
 		LogAdd(buf);
 		return false;
 	}
 
 	CComPtr<ITaskService> pService;
 	if (!InitializeTaskService(pService)) {
-		LogAdd(L"Не удалось выполнить InitializeTaskService");
+		LogAdd(ET_INITIALIZE_TASK);
 		CoUninitialize();
 		return false;
 	}
 
 	CComPtr<ITaskFolder> pRootFolder;
 	if (!GetRootFolder(pService, pRootFolder)) {
-		LogAdd(L"Не удалось выполнить GetRootFolder");
+		LogAdd(ET_GET_ROOT_FOLDER);
 		CoUninitialize();
 		return false;
 	}
 
 	if (!pRootFolder) {
-		LogAdd(L"pRootFolder == NULL");
+		LogAdd(ET_ROOTFOLDER_NULL);
 		CoUninitialize();
 		return false;
 	}
@@ -598,10 +598,10 @@ void DeleteScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& ta
 	HRESULT hr = pRootFolder->DeleteTask(_bstr_t(taskName.c_str()), 0);
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось удалить задачу: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_TASK_DELETE, static_cast<UINT>(hr));
 		LogAdd(buf);
 	} else {
-		LogAdd(L"Задача успешно удалена!");
+		LogAdd(IT_TASK_DELETED);
 	}
 }
 void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName, const std::wstring& exePath) {
@@ -615,7 +615,7 @@ void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& ta
 	HRESULT hr = pService->NewTask(0, &pTask);
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось создать новую задачу: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_TASK_CREATE, static_cast<UINT>(hr));
 		LogAdd(buf);
 		return;
 	}
@@ -658,17 +658,17 @@ void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& ta
 
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось зарегистрировать задачу: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_TASK_REGISTER, static_cast<UINT>(hr));
 		LogAdd(buf);
 	} else {
-		LogAdd(L"Задача успешно зарегистрирована!");
+		LogAdd(IT_TASK_REGISTERED);
 	}
 }
 void StartupChanging(bool isAdd) {
 	HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
 	if (FAILED(hr)) {
 		wchar_t buf[64];
-		swprintf_s(buf, L"Не удалось выполнить CoInitializeEx: 0x%08X", static_cast<UINT>(hr));
+		swprintf_s(buf, ET_COINIT_EX, static_cast<UINT>(hr));
 		LogAdd(buf);
 		return;
 	}
@@ -683,9 +683,9 @@ void StartupChanging(bool isAdd) {
 	GetModuleFileName(NULL, szPath, MAX_PATH);
 	std::wstring appPath = szPath;
 	if (isAdd) {
-		CreateScheduledTask(pService, appName, appPath);
+		CreateScheduledTask(pService, SY_APP_NAME, appPath);
 	} else {
-		DeleteScheduledTask(pService, appName);
+		DeleteScheduledTask(pService, SY_APP_NAME);
 	}
 
 	pService.Release();
@@ -699,7 +699,7 @@ void CreateHKSettWnd() {
 		int cy = 300;
 		int x = rect.left + ((rect.right - rect.left) >> 1) - (cx >> 1);
 		int y = rect.top + ((rect.bottom - rect.top) >> 1) - (cy >> 1);
-		pv.settHK = CreateWindowExW(NULL, pv.wc3, L"Введите новое сочетание клавиш", WS_SYSMENU | WS_POPUP | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
+		pv.settHK = CreateWindowExW(NULL, pv.wc3, TX_PRESS_HOTKEY, WS_SYSMENU | WS_POPUP | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
 		//SetWindowLongPtr(pv.settHK, GWLP_HWNDPARENT, (LONG_PTR)pv.settWin);
 		SetForegroundWindow(pv.settHK);
 	}
@@ -737,22 +737,22 @@ static bool ReadRegistryValue(HKEY root, const wchar_t* subkey, const wchar_t* v
 	return true;
 }
 void LoadNumberFromRegistry() {
-	bool a = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY1, REG_BINARY, pv.isHideOn, true, true);
-	bool b = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY2, REG_DWORD, pv.timerToHide, SECOND, true);
+	bool a = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_FLAG, REG_BINARY, pv.isHideOn, true, true);
+	bool b = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_VAL, REG_DWORD, pv.timerToHide, CONST_AUTOHIDE_DELAY_MS, true);
 
 	if (a)
-		LogAdd(L"Значение KEY1 отсутствует, используем стандартное: " + std::to_wstring(pv.isHideOn));
+		LogAdd(IT_NO_KEY1 + std::to_wstring(pv.isHideOn));
 	if (b)
-		LogAdd(L"Значение KEY2 отсутствует, используем стандартное: " + std::to_wstring(pv.timerToHide));
+		LogAdd(IT_NO_KEY2 + std::to_wstring(pv.timerToHide));
 }
 void SaveToRegistry(bool writeHideOn, bool writeTimer) {
 	if (writeHideOn) {
-		WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY1, REG_BINARY, pv.isHideOn);
-		LogAdd(std::wstring(L"Таймер ") + (pv.isHideOn ? L"включён" : L"выключен"));
+		WriteRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_FLAG, REG_BINARY, pv.isHideOn);
+		LogAdd(std::wstring(IT_TIMER) + (pv.isHideOn ? IT_TIMER_ON : IT_TIMER_OFF));
 	}
 	if (writeTimer) {
-		WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, KEY2, REG_DWORD, pv.timerToHide);
-		LogAdd(L"Записано значение таймера: " + std::to_wstring(pv.timerToHide));
+		WriteRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_VAL, REG_DWORD, pv.timerToHide);
+		LogAdd(IT_TIMER_VALUE_SET + std::to_wstring(pv.timerToHide));
 	}
 }
 void SetZeroModKeysState() {
@@ -839,25 +839,25 @@ std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 		pv.hk.canSet = 0;
 	}
 	if (result.empty())
-		result = PRESSKEYS;
+		result = TX_PRESS_KEYS;
 	return result;
 }
 void SaveHotKeys(byte mod, byte other) {
-	WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYM, REG_DWORD, mod);
-	WriteRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYVK, REG_DWORD, other);
-	LogAdd(std::wstring(L"Новое сочетание записано: ") + pv.hk.nameArr);
+	WriteRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_MODKEYS, REG_DWORD, mod);
+	WriteRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_VKEYS, REG_DWORD, other);
+	LogAdd(std::wstring(IT_NEW_HOTKEY) + pv.hk.nameArr);
 }
 void ReadHotKeys() {
 	const byte defMod = MOD_CONTROL | MOD_ALT;
 	const byte defKey = 'H';
 
-	bool a = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYM, REG_DWORD, pv.hk.modKey, defMod, true);
-	bool b = !ReadRegistryValue(HKEY_CURRENT_USER, REG_PATH, HOTKEYVK, REG_DWORD, pv.hk.otherKey, defKey, true);
+	bool a = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_MODKEYS, REG_DWORD, pv.hk.modKey, defMod, true);
+	bool b = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_VKEYS, REG_DWORD, pv.hk.otherKey, defKey, true);
 
 	if (a)
-		LogAdd(L"Значение HOTKEYM отсутствует, используем стандартное: " + std::to_wstring(pv.hk.modKey));
+		LogAdd(IT_NO_KEY1 + std::to_wstring(pv.hk.modKey));
 	if (b)
-		LogAdd(L"Значение HOTKEYVK отсутствует, используем стандартное: " + std::to_wstring(pv.hk.otherKey));
+		LogAdd(IT_NO_KEY2 + std::to_wstring(pv.hk.otherKey));
 
 	pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
 }
@@ -873,17 +873,17 @@ void AddTrayIcon(HWND hwnd) {
 	nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
 	nid.uCallbackMessage = TRAY_ICON_MESSAGE;
 	nid.hIcon = LoadIcon(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
-	if (!nid.hIcon) LogAdd(L"Ошибка загрузки иконки");
-	wcscpy_s(nid.szTip, SZ_TIP);
+	if (!nid.hIcon) LogAdd(ET_ICON_LOAD);
+	wcscpy_s(nid.szTip, TX_TRAY_TOOLTIP);
 	if (Shell_NotifyIconW(NIM_ADD, &nid)) {
-		LogAdd(L"Иконка создана");
+		LogAdd(IT_ICON_CREATED);
 	} else if (!count) {
-		LogAdd(L"Первая попытка добавить иконку не удалась, жду TaskbarCreated...");
+		LogAdd(IT_TRAY_WAIT_RETRY);
 		count = 1;
 	} else {
 		DWORD err = GetLastError();
 		wchar_t buf[64];
-		swprintf_s(buf, L"Ошибка создания иконки: 0x%08X", static_cast<UINT>(err));
+		swprintf_s(buf, ET_ICON_CREATE, static_cast<UINT>(err));
 		LogAdd(buf);
 	}
 }
@@ -893,11 +893,11 @@ void RemoveTrayIcon(HWND hwnd) {
 	nid.hWnd = hwnd;
 	nid.uID = 1;
 	if (Shell_NotifyIconW(NIM_DELETE, &nid)) {
-		LogAdd(L"Иконка успешно удалена");
+		LogAdd(IT_ICON_DELETED);
 	} else {
 		DWORD err = GetLastError();
 		wchar_t buf[64];
-		swprintf_s(buf, L"Ошибка удаления иконки: 0x%08X", static_cast<UINT>(err));
+		swprintf_s(buf, ET_ICON_DELETE, static_cast<UINT>(err));
 		LogAdd(buf);
 	}
 }

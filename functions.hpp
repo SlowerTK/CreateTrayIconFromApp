@@ -73,9 +73,9 @@ static std::wstring exceptionProcessNames[] = {
 };
 static std::wstring exceptionClassNames[] = {
 	L"",
-	L"CTRIFATrayApp",
-	L"CTIFA Settings",
-	L"CTIFA Timer Settings"
+	SY_CLASS_TRAY,
+	SY_CLASS_SETTINGS,
+	SY_CLASS_TIMERSET
 };
 
 LPCWSTR RegisterNewClass(LPCWSTR className, WNDPROC wndproc);

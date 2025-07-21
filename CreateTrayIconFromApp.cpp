@@ -2,7 +2,7 @@
 
 void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
-						   [&](const HiddenWindow& wnd) { return wnd.isFavorite == TIMED_WINDOW; });
+						   [&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
 	if (it != favoriteWindows.end()) {
 		it->isFavorite = TRUE;
 		if (it->hwnd == FindWindow(it->className.c_str(), it->windowTitle.c_str())) {
@@ -113,12 +113,12 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		oldNameArr = pv.hk.nameArr;
 		pv.hk.modKey = pv.hk.otherKey = pv.hk.isFixed = pv.hk.canSet = 0;
 		pv.hHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandleW(NULL), 0);
-		CreateWindowExW(NULL, STATIC, NULL, WS_VISIBLE | WS_CHILD | SS_BLACKFRAME, 0, 0, cx, cy, hwnd, NULL, pv.hInstance, NULL);
-		pv.hButton1 = CreateWindowExW(0, BUTTON, L"Сохранить", WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy-45), 106, 30, hwnd, (HMENU)INT_PTR(ID_OK_BUTTON), pv.hInstance, NULL);
+		CreateWindowExW(NULL, TX_UI_CONTROL_STATIC, NULL, WS_VISIBLE | WS_CHILD | SS_BLACKFRAME, 0, 0, cx, cy, hwnd, NULL, pv.hInstance, NULL);
+		pv.hButton1 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_SAVE, WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy-45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_OK), pv.hInstance, NULL);
 		SendMessage(pv.hButton1, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
-		pv.hButton2 = CreateWindowExW(0, BUTTON, L"Сброс", WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 2), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_RESET_BUTTON), pv.hInstance, NULL);
+		pv.hButton2 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_RESET, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 2), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_RESET), pv.hInstance, NULL);
 		SendMessage(pv.hButton2, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
-		pv.hButton3 = CreateWindowExW(0, BUTTON, L"Отмена", WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_CANCEL_BUTTON), pv.hInstance, NULL);
+		pv.hButton3 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_CANCEL, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_CANCEL), pv.hInstance, NULL);
 		SendMessage(pv.hButton3, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		return 0;
 	}
@@ -143,7 +143,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			FillRect(hdc, &rect, hBrush);
 			rect.left += 20;
 			SetBkMode(hdc, TRANSPARENT);
-			DrawTextW(hdc, L"Введите новое сочетание клавиш", -1, &rect, DT_VCENTER | DT_SINGLELINE);
+			DrawTextW(hdc, TX_PRESS_HOTKEY, -1, &rect, DT_VCENTER | DT_SINGLELINE);
 		}
 		{//текст над нижней полосой
 			LOGFONT lf = {};
@@ -152,7 +152,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			HFONT hSmallFont = CreateFontIndirect(&lf);
 			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
 			RECT rect = {0,cy-100,cx,cy - 60};
-			DrawTextW(hdc, L"Допустимы только сочетания клавиш, имеющие не менее одной модальной клавиши,\n такой как Ctrl, Alt, Shift или Win.", -1, &rect, /*DT_VCENTER |*/ DT_CENTER);
+			DrawTextW(hdc, IX_ALLOWED_KEYS, -1, &rect, /*DT_VCENTER |*/ DT_CENTER);
 			SelectObject(hdc, hOldFont);
 			DeleteObject(hSmallFont);
 		}
@@ -177,18 +177,18 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	} break;
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
-		case ID_OK_BUTTON:
-			RegHotKey(pv.hk.newModKey, pv.hk.newOtherKey, HK_CTIFA_ID);
+		case ID_BTN_OK:
+			RegHotKey(pv.hk.newModKey, pv.hk.newOtherKey, ID_HOTKEY_HIDE_ACTIVE);
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
 			break;
-		case ID_RESET_BUTTON:
-			pv.hk.nameArr = TB_HOTKEY_TEXT;
-			RegHotKey(MOD_CONTROL | MOD_ALT, 'H', HK_CTIFA_ID);
+		case ID_BTN_RESET:
+			pv.hk.nameArr = TX_TRAY_BTN_HOTKEY;
+			RegHotKey(MOD_CONTROL | MOD_ALT, 'H', ID_HOTKEY_HIDE_ACTIVE);
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
 			break;
-		case ID_CANCEL_BUTTON:
+		case ID_BTN_CANCEL:
 			//не изменять ничего
 			pv.hk.nameArr = oldNameArr;
 			SetZeroModKeysState();
@@ -236,7 +236,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	static unsigned int prevValue[2];
 	switch (uMsg) {
 	case WM_CREATE: {
-		LogAdd(L"Открыты настройки");
+		LogAdd(IT_OPEN_SETTINGS);
 		prevValue[0] = static_cast<unsigned int>(pv.isHideOn);
 		prevValue[1] = pv.timerToHide;
 
@@ -255,20 +255,20 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			HMENU id;
 			HWND* hWnd;
 		} controls[] = {
-			{ STATIC,    WND_NAME_TEXT,        NULL,  NULL,  &pv.hAppText },
-			{ LISTBOX,   NULL,                 WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_APPLICATIONS), &pv.hApplicationsList },
-			{ STATIC,    WND_NAME_TEXT2,       NULL,  NULL,  &pv.hFavText },
-			{ LISTBOX,   NULL,                 WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_FAVORITES), &pv.hFavoritesList },
-			{ BUTTON,    ADDBUTTON_TEXT,       BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_ADD), &pv.hAddButton },
-			{ BUTTON,    REMOVEBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_REMOVE), &pv.hRemoveButton },
-			{ BUTTON,    RELOADBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_RELOAD), &pv.hReloadButton },
-			{ BUTTON,    STARTUP_TEXT,         BS_AUTOCHECKBOX | WS_DISABLED, (HMENU)INT_PTR(ID_BUTTON_AUTOSTART), &pv.hCheckBoxStartUp },
-			{ BUTTON,    HINT_TEXT,            NULL, (HMENU)INT_PTR(ID_BUTTON_HINT), &pv.hCheckBoxHint },
-			{ BUTTON,    CHECKBOX_TEXT,        BS_AUTOCHECKBOX, (HMENU)INT_PTR(ID_BUTTON_TIMEAUTOHIDE), &pv.hCheckBoxButton },
-			{ STATIC,    EDITBOX_TEXT,         NULL, NULL, &pv.hEditBoxText },
-			{ STATIC,    HOTKEY_TEXT,          NULL, NULL, &pv.hHotKeysText },
-			{ STATIC,    pv.hk.nameArr.c_str(),WS_BORDER | SS_CENTER | SS_CENTERIMAGE, NULL, &pv.hHotKeys},
-			{ BUTTON,    HOTKEYBUTTON_TEXT,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BUTTON_HK), &pv.hHotKeysButton }
+			{ TX_UI_CONTROL_STATIC,    TX_WINDOWS_LIST,        NULL,  NULL,  &pv.hAppText },
+			{ TX_UI_CONTROL_LIST,   NULL,                 WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_APPS), &pv.hApplicationsList },
+			{ TX_UI_CONTROL_STATIC,    TX_WINDOWS_SELECTED,       NULL,  NULL,  &pv.hFavText },
+			{ TX_UI_CONTROL_LIST,   NULL,                 WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, (HMENU)INT_PTR(ID_LIST_FAVORITES), &pv.hFavoritesList },
+			{ TX_UI_CONTROL_BUTTON,    TX_BTN_ADD,       BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BTN_ADD), &pv.hAddButton },
+			{ TX_UI_CONTROL_BUTTON,    TX_BTN_REMOVE,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BTN_REMOVE), &pv.hRemoveButton },
+			{ TX_UI_CONTROL_BUTTON,    TX_BTN_RELOAD,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BTN_RELOAD), &pv.hReloadButton },
+			{ TX_UI_CONTROL_BUTTON,    TX_AUTORUN,         BS_AUTOCHECKBOX | WS_DISABLED, (HMENU)INT_PTR(ID_BTN_AUTOSTART), &pv.hCheckBoxStartUp },
+			{ TX_UI_CONTROL_BUTTON,    TX_ICON_HINT,            NULL, (HMENU)INT_PTR(ID_BTN_HINT), &pv.hCheckBoxHint },
+			{ TX_UI_CONTROL_BUTTON,    TX_CHECKBOX_RESTORE,        BS_AUTOCHECKBOX, (HMENU)INT_PTR(ID_BTN_TIME_AUTOHIDE), &pv.hCheckBoxButton },
+			{ TX_UI_CONTROL_STATIC,    TX_EDITBOX_DELAY,         NULL, NULL, &pv.hEditBoxText },
+			{ TX_UI_CONTROL_STATIC,    TX_HOTKEY_TEXT,          NULL, NULL, &pv.hHotKeysText },
+			{ TX_UI_CONTROL_STATIC,    pv.hk.nameArr.c_str(),WS_BORDER | SS_CENTER | SS_CENTERIMAGE, NULL, &pv.hHotKeys},
+			{ TX_UI_CONTROL_BUTTON,    TX_BTN_HOTKEY_SET,    BS_CENTER | BS_VCENTER, (HMENU)INT_PTR(ID_BTN_HOTKEY_CHANGE), &pv.hHotKeysButton }
 		};
 
 		for (auto& ctrl : controls) {
@@ -277,12 +277,12 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			*ctrl.hWnd = hWnd;
 		}
 
-		if (IsTaskScheduled(appName))SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
+		if (IsTaskScheduled(SY_APP_NAME))SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
 		else SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
 		if (pv.isAdminMode) EnableWindow(pv.hCheckBoxStartUp, TRUE);
 
 		std::wstring timerStr = std::to_wstring(pv.timerToHide);
-		pv.hEditBox = CreateWindowExW(WS_EX_CLIENTEDGE, EDIT, timerStr.c_str(), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)INT_PTR(ID_EDIT_FIELD), pv.hInstance, NULL);
+		pv.hEditBox = CreateWindowExW(WS_EX_CLIENTEDGE, TX_UI_CONTROL_EDIT, timerStr.c_str(), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)INT_PTR(ID_EDIT_DELAY_FIELD), pv.hInstance, NULL);
 		SendMessage(pv.hEditBox, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 
 		if (pv.isHideOn) {
@@ -345,13 +345,13 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	}
 	case WM_GETMINMAXINFO: {
 		MINMAXINFO* mmi = (MINMAXINFO*)lParam;
-		mmi->ptMinTrackSize.x = wndX;
-		mmi->ptMinTrackSize.y = wndY;
+		mmi->ptMinTrackSize.x = CONST_WND_WIDTH;
+		mmi->ptMinTrackSize.y = CONST_WND_HEIGHT;
 		break;
 	}
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
-		case ID_BUTTON_ADD: {
+		case ID_BTN_ADD: {
 			LRESULT sel = SendMessage(pv.hApplicationsList, LB_GETCURSEL, NULL, NULL);
 			if (sel != LB_ERR) {
 				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hApplicationsList, LB_GETITEMDATA, sel, NULL);
@@ -359,12 +359,12 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				int i = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)HW->windowTitle.c_str());
 				SendMessage(pv.hFavoritesList, LB_SETITEMDATA, i, (LPARAM)HW);
 				SendMessage(pv.hApplicationsList, LB_DELETESTRING, sel, NULL);
-				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hFavoritesList) + 10, 0);
-				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hApplicationsList) + 10, 0);
+				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
+				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
 			}
 			break;
 		}
-		case ID_BUTTON_REMOVE: {
+		case ID_BTN_REMOVE: {
 			LRESULT sel = SendMessage(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
 			if (sel != LB_ERR) {
 				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
@@ -375,8 +375,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				eraseWindow(favoriteWindows);
 				eraseWindow(hiddenWindows);
 				SendMessage(pv.hFavoritesList, LB_DELETESTRING, sel, NULL);
-				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hApplicationsList) + 10, 0);
-				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hFavoritesList) + 10, 0);
+				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
+				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
 				ShowWindow(HW->hwnd, SW_SHOW);
 				SetFocus(hwnd);
 				delete HW;
@@ -384,10 +384,10 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 			break;
 		}
-		case ID_BUTTON_RELOAD:
+		case ID_BTN_RELOAD:
 			UpdateApplicationsList();
 			break;
-		case ID_BUTTON_TIMEAUTOHIDE:
+		case ID_BTN_TIME_AUTOHIDE:
 			if (SendMessage(pv.hCheckBoxButton, BM_GETCHECK, 0, 0) == BST_CHECKED) {
 				EnableWindow(pv.hEditBoxText, TRUE);
 				EnableWindow(pv.hEditBox, TRUE);
@@ -396,10 +396,10 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				EnableWindow(pv.hEditBox, FALSE);
 			}
 			break;
-		case ID_BUTTON_HINT:
-			MessageBox(hwnd, HINT_MSG, L"Инфо", MB_OK | MB_ICONINFORMATION);
+		case ID_BTN_HINT:
+			MBINFO(IX_WINDOW_HINT);
 			break;
-		case ID_EDIT_FIELD: {
+		case ID_EDIT_DELAY_FIELD: {
 			if (HIWORD(wParam) != EN_UPDATE)
 				break;
 			HWND hEdit = (HWND)lParam;
@@ -416,7 +416,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 		}
 		break;
-		case ID_BUTTON_HK:
+		case ID_BTN_HOTKEY_CHANGE:
 			EnableWindow(hwnd, FALSE);
 			CreateHKSettWnd();
 			break;
@@ -432,31 +432,31 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	//	break;
 	case WM_CLOSE:
 		CollapseToTrayFromFavorite();
-		CheckFolderAndFile(FILEPATHNAME);
+		CheckFolderAndFile(SY_SETTINGS_FILENAME);
 		{
 			std::wstring favorite{};
 			for (const auto& vec : favoriteWindows)
 				favorite += serializeToWstring(vec);
-			WriteMyFile(FILEPATHNAME, favorite);
-			pv.isHideOn = IsDlgButtonChecked(hwnd, ID_BUTTON_TIMEAUTOHIDE);
+			WriteMyFile(SY_SETTINGS_FILENAME, favorite);
+			pv.isHideOn = IsDlgButtonChecked(hwnd, ID_BTN_TIME_AUTOHIDE);
 			bool first = (prevValue[0] != static_cast<unsigned int>(pv.isHideOn)),
 				second = (prevValue[1] != pv.timerToHide);
 			if (first || second)
 				SaveToRegistry(first, second);
 
 			if (pv.isAdminMode)
-				if (IsDlgButtonChecked(hwnd, ID_BUTTON_AUTOSTART)) {
+				if (IsDlgButtonChecked(hwnd, ID_BTN_AUTOSTART)) {
 					StartupChanging(true);
-					LogAdd(L"Добавлено в автозагрузку");
+					LogAdd(IT_AUTORUN_ADDED);
 					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
 				} else {
 					StartupChanging(false);
-					LogAdd(L"Удалено из автозагрузки");
+					LogAdd(IT_AUTORUN_REMOVED);
 					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
 				}
 
-			LogAdd(L"Файл настроек переписан");
-			CheckAndDeleteOldLogs(GetCurrentDate() + L".log");
+			LogAdd(IT_SETTINGS_UPDATED);
+			CheckAndDeleteOldLogs(GetCurrentDate() + SY_FILE_EXTENSION);
 		}
 		DeleteList(pv.hApplicationsList);
 		DeleteList(pv.hFavoritesList);
@@ -473,7 +473,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_CREATE:
-		SetTimer(hwnd, TIMER_ID, SECOND, NULL);
+		SetTimer(hwnd, ID_TIMER_AUTOHIDE, CONST_AUTOHIDE_DELAY_MS, NULL);
 		break;
 	case WM_CTLCOLORSTATIC:
 		return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
@@ -485,7 +485,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	case WM_HOTKEY: {
 		HWND activeWnd = GetForegroundWindow();
 		if (!activeWnd)	return 0;
-		if (wParam == HK_CTIFA_ID) CollapseToTray(activeWnd);
+		if (wParam == ID_HOTKEY_HIDE_ACTIVE) CollapseToTray(activeWnd);
 		break;
 	}
 	case TRAY_ICON_MESSAGE:
@@ -504,19 +504,19 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
 									   [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
 				if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
-					it->isFavorite = TIMED_WINDOW;
+					it->isFavorite = ID_WND_TIMED_HIDE;
 					SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
 				}
 				hiddenWindows.erase(hiddenWindows.begin() + index);
-			} else if (cmd == TB_EXIT)
+			} else if (cmd == ID_TRAY_EXIT)
 				CloseApp();
-			else if (cmd == TB_SETTINGS)
+			else if (cmd == ID_TRAY_SETTINGS)
 				OpenSettings();
-			else if (cmd == TB_RESTART) {
+			else if (cmd == ID_TRAY_RESTART) {
 				ReleaseMutex(pv.hMutex);
 				CloseHandle(pv.hMutex);
-				UnregisterHotKey(hwnd, HK_CTIFA_ID);
-				LogAdd(L"Перезапуск запущен");
+				UnregisterHotKey(hwnd, ID_HOTKEY_HIDE_ACTIVE);
+				LogAdd(IT_RESTARTING);
 				RestartWithAdminRights();
 				PostMessage(hwnd, WM_DESTROY, NULL, NULL);
 			}
@@ -531,12 +531,12 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		}
 		break;
 	case WM_DESTROY:
-		KillTimer(hwnd, TIMER_ID);
+		KillTimer(hwnd, ID_TIMER_AUTOHIDE);
 		CloseApp();
 		break;
 	default:
 		if (uMsg == pv.WM_TASKBAR_CREATED) {
-			LogAdd(L"Пересоздаю иконку");
+			LogAdd(IT_ICON_RECREATE);
 			AddTrayIcon(hwnd);
 		}
 		return DefWindowProc(hwnd, uMsg, wParam, lParam);
@@ -545,9 +545,9 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 }
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ WCHAR* lpCmdLine, _In_ int nCmdShow) {
-	pv.hMutex = CreateMutexW(NULL, TRUE, appName);
+	pv.hMutex = CreateMutexW(NULL, TRUE, SY_APP_NAME);
 	if (pv.hMutex == NULL || GetLastError() == ERROR_ALREADY_EXISTS) {
-		LogAdd(L"Экземпляр программы уже запущен\tВыключение\n");
+		LogAdd(WT_ALREADY_RUNNING);
 		if (pv.hMutex)
 			CloseHandle(pv.hMutex);
 		return 1;
@@ -555,37 +555,37 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	pv.hInstance = hInstance;
 	pv.isAdminMode = isRunAsAdmin();
 	if (!pv.isAdminMode) {
-		LogAdd(L"Без прав администратора");
-		MBATTENTION(WT_ADMIN);
-	} else LogAdd(L"Права администратора получены");
+		LogAdd(IT_ADMIN_MISSING);
+		MBATTENTION(WT_REQUIRE_ADMIN);
+	} else LogAdd(IT_ADMIN_GRANTED);
 	DebugModCheck(lpCmdLine);
-	pv.WM_TASKBAR_CREATED = RegisterWindowMessageW(L"TaskbarCreated");
+	pv.WM_TASKBAR_CREATED = RegisterWindowMessageW(SY_TASKBAR_MSG);
 
 	INITCOMMONCONTROLSEX icc = {sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES};
 	InitCommonControlsEx(&icc);
 
-	pv.wc1 = RegisterNewClass(L"CTRIFATrayApp", TrayProc);
-	pv.wc2 = RegisterNewClass(L"CTIFA Settings", SettingsProc);
-	pv.wc3 = RegisterNewClass(L"CTIFA Timer Settings", HKSettProc);
+	pv.wc1 = RegisterNewClass(SY_CLASS_TRAY, TrayProc);
+	pv.wc2 = RegisterNewClass(SY_CLASS_SETTINGS, SettingsProc);
+	pv.wc3 = RegisterNewClass(SY_CLASS_TIMERSET, HKSettProc);
 	pv.trayWnd = CreateWindowExW(0, pv.wc1, pv.wc1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, pv.hInstance, NULL);
 
 	ReadHotKeys();
-	bool isCanCTIFA = RegisterHotKey(pv.trayWnd, HK_CTIFA_ID, pv.hk.modKey, pv.hk.otherKey);
+	bool isCanCTIFA = RegisterHotKey(pv.trayWnd, ID_HOTKEY_HIDE_ACTIVE, pv.hk.modKey, pv.hk.otherKey);
 	if (!isCanCTIFA) {
-		MBERROR(ET_HOTKEY);
-		LogAdd(ET_HOTKEY);
-		UnregisterHotKey(pv.trayWnd, HK_CTIFA_ID);
+		MBERROR(ET_HOTKEY_REGISTER);
+		LogAdd(ET_HOTKEY_REGISTER);
+		UnregisterHotKey(pv.trayWnd, ID_HOTKEY_HIDE_ACTIVE);
 		//ReleaseMutex(pv.hMutex);
 		//CloseHandle(pv.hMutex);
 		//return -1;
 	}
 	AddTrayIcon(pv.trayWnd);
 	{
-		CheckFolderAndFile(FILEPATHNAME);
+		CheckFolderAndFile(SY_SETTINGS_FILENAME);
 		std::wstring favorites = ReadSettingsFile();
 		if (!favorites.empty())
 			deserializeFromWstring(favorites);
-		CheckAndDeleteOldLogs(GetCurrentDate() + L".log");
+		CheckAndDeleteOldLogs(GetCurrentDate() + SY_FILE_EXTENSION);
 
 		LoadNumberFromRegistry();
 	}
@@ -596,12 +596,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	}
 
 	RemoveTrayIcon(pv.trayWnd);
-	UnregisterHotKey(pv.trayWnd, HK_CTIFA_ID);
+	UnregisterHotKey(pv.trayWnd, ID_HOTKEY_HIDE_ACTIVE);
 	UnregisterClassW(pv.wc1, pv.hInstance);
 	UnregisterClassW(pv.wc2, pv.hInstance);
 	UnregisterClassW(pv.wc3, pv.hInstance);
 	ReleaseMutex(pv.hMutex);
 	CloseHandle(pv.hMutex);
-	LogAdd(L"Завершение работы\n");
+	LogAdd(IT_SHUTDOWN);
 	return 0;
 }
