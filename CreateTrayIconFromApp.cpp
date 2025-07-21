@@ -18,6 +18,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 		wchar_t vk = static_cast<wchar_t>(kbd->vkCode);
 		byte oldModKey = pv.hk.modKey;
 		byte oldOtherKey = pv.hk.otherKey;
+		
 		if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
 			if (!pv.hk.isActive) return CallNextHookEx(NULL, nCode, wParam, lParam);
 			switch (vk) {
@@ -100,6 +101,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	//case WM_CREATE: {
 	//	//parent = (HWND)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
 	static int cx, cy;
+	static std::wstring oldNameArr;
 	switch (uMsg) {
 	case WM_CREATE: {
 		RECT rect = {};
@@ -108,6 +110,8 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		cy = rect.bottom - rect.top;
 		int dx = (cx - 106 * 3) / 4;
 		//OutputDebugString(std::wstring(L"cx = " + std::to_wstring(cx) + L" cy = " + std::to_wstring(cy) + L"\n").c_str());
+		oldNameArr = pv.hk.nameArr;
+		pv.hk.modKey = pv.hk.otherKey = pv.hk.isFixed = pv.hk.canSet = 0;
 		pv.hHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandleW(NULL), 0);
 		CreateWindowExW(NULL, STATIC, NULL, WS_VISIBLE | WS_CHILD | SS_BLACKFRAME, 0, 0, cx, cy, hwnd, NULL, pv.hInstance, NULL);
 		pv.hButton1 = CreateWindowExW(0, BUTTON, L"Сохранить", WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy-45), 106, 30, hwnd, (HMENU)INT_PTR(ID_OK_BUTTON), pv.hInstance, NULL);
@@ -179,12 +183,14 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			DestroyWindow(hwnd);
 			break;
 		case ID_RESET_BUTTON:
+			pv.hk.nameArr = TB_HOTKEY_TEXT;
 			RegHotKey(MOD_CONTROL | MOD_ALT, 'H', HK_CTIFA_ID);
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
 			break;
 		case ID_CANCEL_BUTTON:
 			//не изменять ничего
+			pv.hk.nameArr = oldNameArr;
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
 			break;
@@ -209,12 +215,15 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	//		}
 	//	}
 	//	break;
-	case WM_DESTROY:
+	case WM_CLOSE:
+		break;
+	case WM_DESTROY: 
 		if (pv.hHook) UnhookWindowsHookEx(pv.hHook);
 		EnableWindow(pv.settWin/*parent*/, TRUE);
 		SetWindowTextW(pv.hHotKeys, pv.hk.nameArr.c_str());
 		SetActiveWindow(pv.settWin);
 		//SetForegroundWindow(pv.settWin/*parent*/);
+
 		pv.settHK = NULL;
 		break;
 	default:
