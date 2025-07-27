@@ -43,7 +43,8 @@ struct ProgramVariable {
 	UINT WM_TASKBAR_CREATED;
 	unsigned int timerToHide;
 	HotKeys hk;
-	bool isDebugMode, isAdminMode, isHideOn;
+	bool isDebugMode, isAdminMode, isHideOn, isDark;
+	HBRUSH brDark, brLight;
 };
 struct HiddenWindow {
 	HWND hwnd = 0;
@@ -123,3 +124,6 @@ void SaveHotKeys(byte mod, byte other);
 void ReadHotKeys();
 void AddTrayIcon(HWND hwnd);
 void RemoveTrayIcon(HWND hwnd);
+
+
+

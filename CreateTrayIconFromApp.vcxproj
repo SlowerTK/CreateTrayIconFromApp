@@ -146,9 +146,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CreateTrayIconFromApp.cpp" />
+    <ClCompile Include="DarkMod.cpp" />
     <ClCompile Include="functions.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DarkMod.hpp" />
     <ClInclude Include="functions.hpp" />
     <ClInclude Include="resource.h" />
   </ItemGroup>

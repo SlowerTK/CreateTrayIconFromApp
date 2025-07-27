@@ -1,4 +1,5 @@
 ﻿#include "functions.hpp"
+#include "DarkMod.hpp"
 
 void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
@@ -102,14 +103,15 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	//	//parent = (HWND)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
 	static int cx, cy;
 	static std::wstring oldNameArr;
+	static HBRUSH bgBrush = CreateSolidBrush({ 0x3b3b3b });
 	switch (uMsg) {
 	case WM_CREATE: {
+		EnableDarkForWindow(hwnd, pv.isDark);
 		RECT rect = {};
 		GetWindowRect(hwnd, &rect);
 		cx = rect.right - rect.left;
 		cy = rect.bottom - rect.top;
 		int dx = (cx - 106 * 3) / 4;
-		//OutputDebugString(std::wstring(L"cx = " + std::to_wstring(cx) + L" cy = " + std::to_wstring(cy) + L"\n").c_str());
 		oldNameArr = pv.hk.nameArr;
 		pv.hk.modKey = pv.hk.otherKey = pv.hk.isFixed = pv.hk.canSet = 0;
 		pv.hHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandleW(NULL), 0);
@@ -120,21 +122,43 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		SendMessage(pv.hButton2, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		pv.hButton3 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_CANCEL, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_CANCEL), pv.hInstance, NULL);
 		SendMessage(pv.hButton3, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		
+		ApplyThemeToControls(hwnd, pv.isDark);
 		return 0;
 	}
-	case WM_CTLCOLORSTATIC:
-	case WM_CTLCOLORBTN: {
+	case WM_SETTINGCHANGE:
+		if (lParam && wcscmp((LPCWSTR)lParam, L"ImmersiveColorSet") == 0) {
+			bool new_dark = IsSystemInDarkMode();
+			if (new_dark != pv.isDark) {
+				pv.isDark = new_dark;
+				EnableDarkForWindow(hwnd, pv.isDark);
+				ApplyThemeToControls(hwnd, pv.isDark);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+		}
+		break;
+	case WM_ERASEBKGND:
+	{
+		HDC hdc = (HDC)wParam;
+		RECT rc;
+		GetClientRect(hwnd, &rc);
+		FillRect(hdc, &rc, pv.isDark ? bgBrush : pv.brLight);
+		return 1;
+	}
+	case WM_CTLCOLORSTATIC: {
+	case WM_CTLCOLORBTN: 
 		HDC hdc = (HDC)wParam;
 		SetBkMode(hdc, TRANSPARENT);
-		return (LRESULT)GetStockObject(NULL_BRUSH);
+		SetTextColor(hdc, pv.isDark ? RGB(230, 230, 230) : RGB(0, 0, 0));
+		return (INT_PTR)(pv.isDark ? pv.brDark : pv.brLight);
 	}
 	case WM_PAINT: {
 		EnableWindow(pv.hButton1, pv.hk.canSet);
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hwnd, &ps);
-		HBRUSH hBrush = CreateSolidBrush(RGB(240, 240, 240));
+		HBRUSH hBrush = pv.isDark ? CreateSolidBrush({ 0x1e1e1e }) : CreateSolidBrush({ 0xf0f0f0 });
 		SelectObject(hdc, pv.hFont);
-		{//нижняя тёмная полоса
+		{//нижняя полоса
 			RECT rect = {0, cy-60, cx, cy};
 			FillRect(hdc, &rect, hBrush);
 		}
@@ -143,6 +167,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			FillRect(hdc, &rect, hBrush);
 			rect.left += 20;
 			SetBkMode(hdc, TRANSPARENT);
+			SetTextColor(hdc, pv.isDark ? RGB(230, 230, 230) : RGB(0, 0, 0));
 			DrawTextW(hdc, TX_PRESS_HOTKEY, -1, &rect, DT_VCENTER | DT_SINGLELINE);
 		}
 		{//текст над нижней полосой
@@ -223,7 +248,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		SetWindowTextW(pv.hHotKeys, pv.hk.nameArr.c_str());
 		SetActiveWindow(pv.settWin);
 		//SetForegroundWindow(pv.settWin/*parent*/);
-
+		DeleteObject(bgBrush);
 		pv.settHK = NULL;
 		break;
 	default:
@@ -236,6 +261,9 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	static unsigned int prevValue[2];
 	switch (uMsg) {
 	case WM_CREATE: {
+		pv.isDark = IsSystemInDarkMode();
+		EnableDarkForWindow(hwnd, pv.isDark);
+
 		LogAdd(IT_OPEN_SETTINGS);
 		prevValue[0] = static_cast<unsigned int>(pv.isHideOn);
 		prevValue[1] = pv.timerToHide;
@@ -305,15 +333,40 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 
 		UpdateFavoriteList();
 		UpdateApplicationsList();
+
+		ApplyThemeToControls(hwnd, pv.isDark);
 	}
 				  break;
+	case WM_SETTINGCHANGE:
+		if (lParam && wcscmp((LPCWSTR)lParam, L"ImmersiveColorSet") == 0) {
+			bool new_dark = IsSystemInDarkMode();
+			if (new_dark != pv.isDark) {
+				pv.isDark = new_dark;
+				EnableDarkForWindow(hwnd, pv.isDark);
+				ApplyThemeToControls(hwnd, pv.isDark);
+				InvalidateRect(hwnd, NULL, TRUE);
+			}
+		}
+		break;
+	case WM_ERASEBKGND:
+	{
+		HDC hdc = (HDC)wParam;
+		RECT rc;
+		GetClientRect(hwnd, &rc);
+		FillRect(hdc, &rc, pv.isDark ? pv.brDark : pv.brLight);
+		return 1;
+	}
 	case WM_CTLCOLORBTN:
 	case WM_CTLCOLOREDIT:
 	case WM_CTLCOLORLISTBOX:
-	case WM_CTLCOLORSTATIC: {
-		HDC hdcStatic = (HDC)wParam;
-		SetBkMode(hdcStatic, TRANSPARENT);
-		return (LRESULT)GetStockObject(WHITE_PEN);
+	case WM_CTLCOLORSTATIC:
+	{
+		HDC hdc = (HDC)wParam;
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, pv.isDark ? RGB(230, 230, 230) : RGB(0, 0, 0));
+		//SelectObject(hdc, (HGDIOBJ)pv.hFont);
+
+		return (INT_PTR)(pv.isDark ? pv.brDark : pv.brLight);
 	}
 	//case WM_PAINT:
 
@@ -473,10 +526,11 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_CREATE:
+		pv.brDark = CreateSolidBrush(RGB(30, 30, 30));
+		pv.brLight = (HBRUSH)(WHITE_PEN);
 		SetTimer(hwnd, ID_TIMER_AUTOHIDE, CONST_AUTOHIDE_DELAY_MS, NULL);
 		break;
-	case WM_CTLCOLORSTATIC:
-		return (LRESULT)GetSysColorBrush(COLOR_WINDOW);
+
 	case WM_TIMER:
 		for (auto& fw : favoriteWindows) {//наверное лучше сделать отдельный поток под это действие
 			FindWindowFromFile(fw, false);
@@ -491,6 +545,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	case TRAY_ICON_MESSAGE:
 		switch (lParam) {
 		case WM_RBUTTONUP: {
+			RefreshDarkMenuTheme();
 			bool isDebug = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
 			POINT cursorPos;
 			GetCursorPos(&cursorPos);
@@ -532,6 +587,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		break;
 	case WM_DESTROY:
 		KillTimer(hwnd, ID_TIMER_AUTOHIDE);
+		DeleteObject(pv.brDark);
 		CloseApp();
 		break;
 	default:
@@ -563,6 +619,8 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 
 	INITCOMMONCONTROLSEX icc = {sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES};
 	InitCommonControlsEx(&icc);
+	InitDarkMode();
+	pv.isDark = IsSystemInDarkMode();
 
 	pv.wc1 = RegisterNewClass(SY_CLASS_TRAY, TrayProc);
 	pv.wc2 = RegisterNewClass(SY_CLASS_SETTINGS, SettingsProc);
