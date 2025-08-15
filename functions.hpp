@@ -18,10 +18,14 @@
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "comsupp.lib")
 
+#include <commctrl.h>
+#include <uxtheme.h>
+#include <vssym32.h>
 #pragma comment(linker,"\"/manifestdependency:type='win32' \
 name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 #pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "uxtheme.lib")
 
 struct HotKeys {
 	std::wstring nameArr;
@@ -44,7 +48,7 @@ struct ProgramVariable {
 	unsigned int timerToHide;
 	HotKeys hk;
 	bool isDebugMode, isAdminMode, isHideOn, isDark;
-	HBRUSH brDark, brLight;
+	HBRUSH brDark, brDarkGray, brLight, brLightGray;
 };
 struct HiddenWindow {
 	HWND hwnd = 0;

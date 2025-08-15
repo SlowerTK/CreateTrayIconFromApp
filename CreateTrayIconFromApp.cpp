@@ -1,9 +1,127 @@
 ﻿#include "functions.hpp"
 #include "DarkMod.hpp"
+#include <windowsx.h>
+
+LRESULT CALLBACK CheckBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+	switch (msg) {
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hwnd, &ps);
+
+		RECT rc;
+		GetClientRect(hwnd, &rc);
+
+		UINT state = (UINT)SendMessageW(hwnd, BM_GETCHECK, 0, 0);
+		int themeState;
+		BOOL isActive = IsWindowEnabled(hwnd);
+		if (!isActive)
+			themeState = (state == BST_CHECKED) ? CBS_CHECKEDDISABLED : CBS_UNCHECKEDDISABLED;
+		else if (state == BST_CHECKED)
+			themeState = CBS_CHECKEDNORMAL;
+		else
+			themeState = CBS_UNCHECKEDNORMAL;
+
+		wchar_t buf[256];
+		GetWindowTextW(hwnd, buf, SIZEOF(buf));
+		HGDIOBJ oldFont = SelectObject(hdc, pv.hFont);
+
+
+		HTHEME hTheme = OpenThemeData(hwnd, L"BUTTON");
+		if (hTheme) {
+			SIZE checkSize;
+			GetThemePartSize(hTheme, hdc, BP_CHECKBOX, themeState, NULL, TS_TRUE, &checkSize);
+
+			RECT rcCheck = { rc.left, rc.top, rc.left + checkSize.cx, rc.top + checkSize.cy };
+			int offsetY = (rc.bottom - checkSize.cy) / 2;
+			OffsetRect(&rcCheck, 0, offsetY);
+
+			DrawThemeBackground(hTheme, hdc, BP_CHECKBOX, themeState, &rcCheck, NULL);
+
+			rc.left = rcCheck.right + 4;
+
+			COLORREF textColor;
+			if (isActive) {
+				if (pv.isDark)
+					textColor = ID_CLR_LIGHT;
+				else
+					textColor = ID_CLR_BLACK;
+			}
+			else {
+				if (pv.isDark)
+					textColor = ID_CLR_DISABLED_D;
+				else
+					textColor = ID_CLR_DISABLED_L;
+			}
+
+			HBRUSH bgBrush = pv.isDark ? pv.brDark : pv.brLight;
+			FillRect(hdc, &rc, bgBrush);
+
+			SetBkMode(hdc, TRANSPARENT);
+			SetTextColor(hdc, textColor);
+			DrawTextW(hdc, buf, -1, &rc, DT_SINGLELINE | DT_VCENTER);
+
+			CloseThemeData(hTheme);
+		}
+		else {
+			DrawTextW(hdc, buf, -1, &rc, DT_SINGLELINE | DT_VCENTER);
+		}
+		SelectObject(hdc, oldFont);
+		EndPaint(hwnd, &ps);
+		return 0;
+	}
+	case WM_NCDESTROY:
+		RemoveWindowSubclass(hwnd, CheckBoxSubclassProc, uIdSubclass);
+		break;
+	}
+	return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
+LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+	switch (msg) {
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps;
+		HDC hdc = BeginPaint(hwnd, &ps);
+
+		RECT rc;
+		GetClientRect(hwnd, &rc);
+
+		HBRUSH bgBrush = pv.isDark ? pv.brDark : pv.brLight;
+		FillRect(hdc, &rc, bgBrush);
+
+		wchar_t buf[256];
+		GetWindowTextW(hwnd, buf, _countof(buf));
+
+		HGDIOBJ oldFont = SelectObject(hdc, pv.hFont);
+		COLORREF textColor = IsWindowEnabled(hwnd)
+			? (pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK)
+			: (pv.isDark ? ID_CLR_DISABLED_D : ID_CLR_DISABLED_L);
+
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, textColor);
+
+		DrawTextW(hdc, buf, -1, &rc, DT_SINGLELINE);
+
+		SelectObject(hdc, oldFont);
+		EndPaint(hwnd, &ps);
+		return 0;
+	}
+	case WM_ENABLE:
+		InvalidateRect(hwnd, NULL, TRUE);
+		return 0;
+	case WM_NCDESTROY:
+		RemoveWindowSubclass(hwnd, StaticSubclassProc, uIdSubclass);
+		break;
+	}
+
+	return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
 
 void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
-						   [&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
+		[&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
 	if (it != favoriteWindows.end()) {
 		it->isFavorite = TRUE;
 		if (it->hwnd == FindWindow(it->className.c_str(), it->windowTitle.c_str())) {
@@ -19,7 +137,7 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 		wchar_t vk = static_cast<wchar_t>(kbd->vkCode);
 		byte oldModKey = pv.hk.modKey;
 		byte oldOtherKey = pv.hk.otherKey;
-		
+
 		if (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN) {
 			if (!pv.hk.isActive) return CallNextHookEx(NULL, nCode, wParam, lParam);
 			switch (vk) {
@@ -58,7 +176,8 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 					UnregisterHotKey(pv.settHK, 0);
 				}
 			}
-		} else {
+		}
+		else {
 			switch (vk) {
 			case VK_LMENU:
 			case VK_RMENU:
@@ -95,17 +214,12 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 	return CallNextHookEx(NULL, nCode, wParam, lParam);
 }
 
-
 static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	////static HWND parent = NULL;
-	//switch (uMsg) {
-	//case WM_CREATE: {
-	//	//parent = (HWND)GetWindowLongPtrW(hwnd, GWLP_HWNDPARENT);
 	static int cx, cy;
 	static std::wstring oldNameArr;
-	static HBRUSH bgBrush = CreateSolidBrush({ 0x3b3b3b });
 	switch (uMsg) {
-	case WM_CREATE: {
+	case WM_CREATE:
+	{
 		EnableDarkForWindow(hwnd, pv.isDark);
 		RECT rect = {};
 		GetWindowRect(hwnd, &rect);
@@ -116,13 +230,13 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		pv.hk.modKey = pv.hk.otherKey = pv.hk.isFixed = pv.hk.canSet = 0;
 		pv.hHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandleW(NULL), 0);
 		CreateWindowExW(NULL, TX_UI_CONTROL_STATIC, NULL, WS_VISIBLE | WS_CHILD | SS_BLACKFRAME, 0, 0, cx, cy, hwnd, NULL, pv.hInstance, NULL);
-		pv.hButton1 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_SAVE, WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy-45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_OK), pv.hInstance, NULL);
+		pv.hButton1 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_SAVE, WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_OK), pv.hInstance, NULL);
 		SendMessage(pv.hButton1, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		pv.hButton2 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_RESET, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 2), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_RESET), pv.hInstance, NULL);
 		SendMessage(pv.hButton2, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		pv.hButton3 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_CANCEL, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_CANCEL), pv.hInstance, NULL);
 		SendMessage(pv.hButton3, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
-		
+
 		ApplyThemeToControls(hwnd, pv.isDark);
 		return 0;
 	}
@@ -142,32 +256,34 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		HDC hdc = (HDC)wParam;
 		RECT rc;
 		GetClientRect(hwnd, &rc);
-		FillRect(hdc, &rc, pv.isDark ? bgBrush : pv.brLight);
+		FillRect(hdc, &rc, pv.isDark ? pv.brDarkGray : pv.brLight);
 		return 1;
 	}
-	case WM_CTLCOLORSTATIC: {
-	case WM_CTLCOLORBTN: 
+	case WM_CTLCOLORSTATIC:
+	{
+	case WM_CTLCOLORBTN:
 		HDC hdc = (HDC)wParam;
 		SetBkMode(hdc, TRANSPARENT);
-		SetTextColor(hdc, pv.isDark ? RGB(230, 230, 230) : RGB(0, 0, 0));
+		SetTextColor(hdc, pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK);
 		return (INT_PTR)(pv.isDark ? pv.brDark : pv.brLight);
 	}
-	case WM_PAINT: {
+	case WM_PAINT:
+	{
 		EnableWindow(pv.hButton1, pv.hk.canSet);
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hwnd, &ps);
-		HBRUSH hBrush = pv.isDark ? CreateSolidBrush({ 0x1e1e1e }) : CreateSolidBrush({ 0xf0f0f0 });
+		HBRUSH hBrush = pv.isDark ? CreateSolidBrush(ID_CLR_DARK) : CreateSolidBrush(ID_CLR_LIGHTGRAY);
 		SelectObject(hdc, pv.hFont);
 		{//нижняя полоса
-			RECT rect = {0, cy-60, cx, cy};
+			RECT rect = { 0, cy - 60, cx, cy };
 			FillRect(hdc, &rect, hBrush);
 		}
 		{//Текст и верхняя полоса
-			RECT rect = {0, 0, cx, 50};
+			RECT rect = { 0, 0, cx, 50 };
 			FillRect(hdc, &rect, hBrush);
 			rect.left += 20;
 			SetBkMode(hdc, TRANSPARENT);
-			SetTextColor(hdc, pv.isDark ? RGB(230, 230, 230) : RGB(0, 0, 0));
+			SetTextColor(hdc, pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK);
 			DrawTextW(hdc, TX_PRESS_HOTKEY, -1, &rect, DT_VCENTER | DT_SINGLELINE);
 		}
 		{//текст над нижней полосой
@@ -176,7 +292,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			lf.lfHeight += 2;
 			HFONT hSmallFont = CreateFontIndirect(&lf);
 			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
-			RECT rect = {0,cy-100,cx,cy - 60};
+			RECT rect = { 0,cy - 100,cx,cy - 60 };
 			DrawTextW(hdc, IX_ALLOWED_KEYS, -1, &rect, /*DT_VCENTER |*/ DT_CENTER);
 			SelectObject(hdc, hOldFont);
 			DeleteObject(hSmallFont);
@@ -187,7 +303,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			lf.lfHeight -= 18;
 			HFONT hSmallFont = CreateFontIndirect(&lf);
 			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
-			pv.hk.textRect = {20, 50, cx-20, cy - 100};
+			pv.hk.textRect = { 20, 50, cx - 20, cy - 100 };
 			SIZE textSize;
 			GetTextExtentPoint32W(hdc, pv.hk.nameArr.c_str(), static_cast<int>(pv.hk.nameArr.length()), &textSize);
 			int textX = pv.hk.textRect.left + (pv.hk.textRect.right - pv.hk.textRect.left - textSize.cx) / 2;
@@ -228,27 +344,26 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_SETFOCUS:
 		pv.hk.isActive = true;
 		return 0;
-	//case WM_NCCALCSIZE:
-	//	return 0;
+		//case WM_NCCALCSIZE:
+		//	return 0;
 	case WM_NCHITTEST:
 		return HTCAPTION;
-	//case WM_ACTIVATE:
-	//	if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) {
-	//		if (IsWindow(pv.settHK)) {
-	//			SetForegroundWindow(pv.settHK);
-	//			SetFocus(pv.settHK);
-	//		}
-	//	}
-	//	break;
+		//case WM_ACTIVATE:
+		//	if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) {
+		//		if (IsWindow(pv.settHK)) {
+		//			SetForegroundWindow(pv.settHK);
+		//			SetFocus(pv.settHK);
+		//		}
+		//	}
+		//	break;
 	case WM_CLOSE:
 		break;
-	case WM_DESTROY: 
+	case WM_DESTROY:
 		if (pv.hHook) UnhookWindowsHookEx(pv.hHook);
 		EnableWindow(pv.settWin/*parent*/, TRUE);
 		SetWindowTextW(pv.hHotKeys, pv.hk.nameArr.c_str());
 		SetActiveWindow(pv.settWin);
 		//SetForegroundWindow(pv.settWin/*parent*/);
-		DeleteObject(bgBrush);
 		pv.settHK = NULL;
 		break;
 	default:
@@ -260,7 +375,8 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	static unsigned int prevValue[2];
 	switch (uMsg) {
-	case WM_CREATE: {
+	case WM_CREATE:
+	{
 		pv.isDark = IsSystemInDarkMode();
 		EnableDarkForWindow(hwnd, pv.isDark);
 
@@ -272,7 +388,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
 		SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
 
-		NONCLIENTMETRICS ncm = {sizeof(NONCLIENTMETRICS)};
+		NONCLIENTMETRICS ncm = { sizeof(NONCLIENTMETRICS) };
 		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
 		pv.hFont = CreateFontIndirect(&ncm.lfMessageFont);
 
@@ -305,19 +421,25 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			*ctrl.hWnd = hWnd;
 		}
 
+		SetWindowSubclass(pv.hCheckBoxButton, CheckBoxSubclassProc, 1, 0);
+		SetWindowSubclass(pv.hCheckBoxStartUp, CheckBoxSubclassProc, 1, 0);
+
 		if (IsTaskScheduled(SY_APP_NAME))SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
 		else SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
 		if (pv.isAdminMode) EnableWindow(pv.hCheckBoxStartUp, TRUE);
 
+		SetWindowSubclass(pv.hEditBoxText, StaticSubclassProc, 1, 0);
+
 		std::wstring timerStr = std::to_wstring(pv.timerToHide);
-		pv.hEditBox = CreateWindowExW(WS_EX_CLIENTEDGE, TX_UI_CONTROL_EDIT, timerStr.c_str(), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)INT_PTR(ID_EDIT_DELAY_FIELD), pv.hInstance, NULL);
+		pv.hEditBox = CreateWindowExW(0, TX_UI_CONTROL_EDIT, timerStr.c_str(), WS_VISIBLE | WS_BORDER | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)INT_PTR(ID_EDIT_DELAY_FIELD), pv.hInstance, NULL);
 		SendMessage(pv.hEditBox, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 
 		if (pv.isHideOn) {
 			SendMessage(pv.hCheckBoxButton, BM_SETCHECK, BST_CHECKED, 0);
 			EnableWindow(pv.hEditBoxText, TRUE);
 			EnableWindow(pv.hEditBox, TRUE);
-		} else {
+		}
+		else {
 			SendMessage(pv.hCheckBoxButton, BM_SETCHECK, BST_UNCHECKED, 0);
 			EnableWindow(pv.hEditBoxText, FALSE);
 			EnableWindow(pv.hEditBox, FALSE);
@@ -336,7 +458,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 
 		ApplyThemeToControls(hwnd, pv.isDark);
 	}
-				  break;
+	break;
 	case WM_SETTINGCHANGE:
 		if (lParam && wcscmp((LPCWSTR)lParam, L"ImmersiveColorSet") == 0) {
 			bool new_dark = IsSystemInDarkMode();
@@ -363,15 +485,15 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	{
 		HDC hdc = (HDC)wParam;
 		SetBkMode(hdc, TRANSPARENT);
-		SetTextColor(hdc, pv.isDark ? RGB(230, 230, 230) : RGB(0, 0, 0));
-		//SelectObject(hdc, (HGDIOBJ)pv.hFont);
+		SetTextColor(hdc, pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK);
 
 		return (INT_PTR)(pv.isDark ? pv.brDark : pv.brLight);
 	}
 	//case WM_PAINT:
 
 	//	break;
-	case WM_SIZE: {
+	case WM_SIZE:
+	{
 		int width = LOWORD(lParam);
 		int height = HIWORD(lParam);
 		const int fixedWidth = 400;
@@ -396,7 +518,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		InvalidateRect(hwnd, NULL, TRUE);
 		break;
 	}
-	case WM_GETMINMAXINFO: {
+	case WM_GETMINMAXINFO:
+	{
 		MINMAXINFO* mmi = (MINMAXINFO*)lParam;
 		mmi->ptMinTrackSize.x = CONST_WND_WIDTH;
 		mmi->ptMinTrackSize.y = CONST_WND_HEIGHT;
@@ -404,7 +527,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 	}
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
-		case ID_BTN_ADD: {
+		case ID_BTN_ADD:
+		{
 			LRESULT sel = SendMessage(pv.hApplicationsList, LB_GETCURSEL, NULL, NULL);
 			if (sel != LB_ERR) {
 				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hApplicationsList, LB_GETITEMDATA, sel, NULL);
@@ -417,13 +541,14 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			}
 			break;
 		}
-		case ID_BTN_REMOVE: {
+		case ID_BTN_REMOVE:
+		{
 			LRESULT sel = SendMessage(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
 			if (sel != LB_ERR) {
 				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
 				auto eraseWindow = [HW](std::vector<HiddenWindow>& vec) {
 					auto it = std::find_if(vec.begin(), vec.end(),
-										   [&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
+						[&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
 					if (it != vec.end()) vec.erase(it);	};
 				eraseWindow(favoriteWindows);
 				eraseWindow(hiddenWindows);
@@ -444,7 +569,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			if (SendMessage(pv.hCheckBoxButton, BM_GETCHECK, 0, 0) == BST_CHECKED) {
 				EnableWindow(pv.hEditBoxText, TRUE);
 				EnableWindow(pv.hEditBox, TRUE);
-			} else {
+			}
+			else {
 				EnableWindow(pv.hEditBoxText, FALSE);
 				EnableWindow(pv.hEditBox, FALSE);
 			}
@@ -452,18 +578,20 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		case ID_BTN_HINT:
 			MBINFO(IX_WINDOW_HINT);
 			break;
-		case ID_EDIT_DELAY_FIELD: {
+		case ID_EDIT_DELAY_FIELD:
+		{
 			if (HIWORD(wParam) != EN_UPDATE)
 				break;
 			HWND hEdit = (HWND)lParam;
-			wchar_t buffer[16] = {0};
+			wchar_t buffer[16] = { 0 };
 			GetWindowTextW(hEdit, buffer, 16);
 			unsigned int value = wcstoul(buffer, NULL, 10);
 			unsigned int prevValue = (unsigned int)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 			if (value < 1 || value > INT_MAX) {
 				SetWindowTextW(hEdit, std::to_wstring(prevValue).c_str());
 				SendMessageW(hEdit, EM_SETSEL, 0, -1);
-			} else {
+			}
+			else {
 				SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)value);
 				pv.timerToHide = value;
 			}
@@ -475,14 +603,6 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			break;
 		}
 		break;
-	//case WM_ACTIVATE:
-	//	if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) {
-	//		if (IsWindow(pv.settHK)) {
-	//			SetForegroundWindow(pv.settHK);
-	//			SetFocus(pv.settHK);
-	//		}
-	//	}
-	//	break;
 	case WM_CLOSE:
 		CollapseToTrayFromFavorite();
 		CheckFolderAndFile(SY_SETTINGS_FILENAME);
@@ -502,7 +622,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					StartupChanging(true);
 					LogAdd(IT_AUTORUN_ADDED);
 					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
-				} else {
+				}
+				else {
 					StartupChanging(false);
 					LogAdd(IT_AUTORUN_REMOVED);
 					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
@@ -526,8 +647,10 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_CREATE:
-		pv.brDark = CreateSolidBrush(RGB(30, 30, 30));
-		pv.brLight = (HBRUSH)(WHITE_PEN);
+		pv.brDark = CreateSolidBrush(ID_CLR_DARK);
+		pv.brDarkGray = CreateSolidBrush(ID_CLR_DARKGRAY);
+		pv.brLight = CreateSolidBrush(ID_CLR_LIGHT);
+		pv.brLightGray = CreateSolidBrush(ID_CLR_LIGHTGRAY);
 		SetTimer(hwnd, ID_TIMER_AUTOHIDE, CONST_AUTOHIDE_DELAY_MS, NULL);
 		break;
 
@@ -536,7 +659,8 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			FindWindowFromFile(fw, false);
 		}
 		break;
-	case WM_HOTKEY: {
+	case WM_HOTKEY:
+	{
 		HWND activeWnd = GetForegroundWindow();
 		if (!activeWnd)	return 0;
 		if (wParam == ID_HOTKEY_HIDE_ACTIVE) CollapseToTray(activeWnd);
@@ -544,7 +668,8 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	}
 	case TRAY_ICON_MESSAGE:
 		switch (lParam) {
-		case WM_RBUTTONUP: {
+		case WM_RBUTTONUP:
+		{
 			RefreshDarkMenuTheme();
 			bool isDebug = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
 			POINT cursorPos;
@@ -557,13 +682,14 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				ShowWindow(hiddenWindows[index].hwnd, SW_SHOW);
 				SetForegroundWindow(hiddenWindows[index].hwnd);
 				auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
-									   [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
+					[&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
 				if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
 					it->isFavorite = ID_WND_TIMED_HIDE;
 					SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
 				}
 				hiddenWindows.erase(hiddenWindows.begin() + index);
-			} else if (cmd == ID_TRAY_EXIT)
+			}
+			else if (cmd == ID_TRAY_EXIT)
 				CloseApp();
 			else if (cmd == ID_TRAY_SETTINGS)
 				OpenSettings();
@@ -577,7 +703,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			}
 			PostMessage(hwnd, WM_NULL, NULL, NULL);
 		}
-						 break;
+		break;
 		case WM_LBUTTONUP:
 			OpenSettings();
 			break;
@@ -588,6 +714,9 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 	case WM_DESTROY:
 		KillTimer(hwnd, ID_TIMER_AUTOHIDE);
 		DeleteObject(pv.brDark);
+		DeleteObject(pv.brDarkGray);
+		DeleteObject(pv.brLight);
+		DeleteObject(pv.brLightGray);
 		CloseApp();
 		break;
 	default:
@@ -613,11 +742,12 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	if (!pv.isAdminMode) {
 		LogAdd(IT_ADMIN_MISSING);
 		MBATTENTION(WT_REQUIRE_ADMIN);
-	} else LogAdd(IT_ADMIN_GRANTED);
+	}
+	else LogAdd(IT_ADMIN_GRANTED);
 	DebugModCheck(lpCmdLine);
 	pv.WM_TASKBAR_CREATED = RegisterWindowMessageW(SY_TASKBAR_MSG);
 
-	INITCOMMONCONTROLSEX icc = {sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES};
+	INITCOMMONCONTROLSEX icc = { sizeof(INITCOMMONCONTROLSEX), ICC_WIN95_CLASSES };
 	InitCommonControlsEx(&icc);
 	InitDarkMode();
 	pv.isDark = IsSystemInDarkMode();

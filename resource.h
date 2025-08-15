@@ -138,14 +138,25 @@ constexpr auto ID_BTN_CANCEL = 103;
 constexpr auto ID_TRAY_SETTINGS = 1;
 constexpr auto ID_TRAY_EXIT = 2;
 constexpr auto ID_TRAY_RESTART = 3;
+
+constexpr auto ID_CLR_BLACK = RGB(0, 0, 0);
+constexpr auto ID_CLR_LIGHT = RGB(255, 255, 255);
+constexpr auto ID_CLR_LIGHTGRAY = RGB(243, 243, 243);
+constexpr auto ID_CLR_DARK = RGB(30, 30, 30);
+constexpr auto ID_CLR_DARKGRAY = RGB(59, 59, 59);
+constexpr auto ID_CLR_GRAY = RGB(109, 109, 109);
+constexpr auto ID_CLR_TRAYLIGHT = RGB(249, 249, 249);
+constexpr auto ID_CLR_TRAYGRAY = RGB(44, 44, 44);
+constexpr auto ID_CLR_DISABLED_D = RGB(100, 100, 100);
+constexpr auto ID_CLR_DISABLED_L = RGB(200, 200, 200);
 //
 //defines
 
 #define RECT2CORD(rect) rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top
 #define SIZEOF(str) (sizeof(str) / sizeof(str[0]))
-#define MBATTENTION(str) MessageBox(NULL, str, L"Внимание!", MB_ICONWARNING)
-#define MBERROR(str) MessageBox(NULL, str, L"Ошибка!", MB_ICONERROR)
-#define MBINFO(str) MessageBox(hwnd, str, L"Инфо", MB_ICONINFORMATION);
+#define MBATTENTION(str) MessageBox(NULL, str, L"Внимание!", MB_ICONWARNING | MB_SETFOREGROUND)
+#define MBERROR(str) MessageBox(NULL, str, L"Ошибка!", MB_ICONERROR | MB_SETFOREGROUND)
+#define MBINFO(str) MessageBox(hwnd, str, L"Инфо", MB_OK | MB_SETFOREGROUND);
 #define TRAY_ICON_MESSAGE	(WM_USER + 1)
 
 

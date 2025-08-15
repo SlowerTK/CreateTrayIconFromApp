@@ -11,3 +11,4 @@ void EnableDarkForWindow(HWND hwnd, bool enable);
 void ApplyThemeToControls(HWND hwnd, bool dark);
 bool IsSystemInDarkMode();
 void RefreshDarkMenuTheme();
+

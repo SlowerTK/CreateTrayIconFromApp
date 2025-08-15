@@ -51,7 +51,7 @@ static HBITMAP IconToBitmap(HICON hIcon) {
 	HDC hdcMem = CreateCompatibleDC(hdcScreen);
 	HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
 	HBITMAP hOldBitmap = (HBITMAP)SelectObject(hdcMem, hBitmap);
-	HBRUSH hBrush = pv.isDark ? CreateSolidBrush({0x2c2c2c}) : CreateSolidBrush({ 0xf9f9f9 });
+	HBRUSH hBrush = pv.isDark ? CreateSolidBrush(ID_CLR_TRAYGRAY) : CreateSolidBrush(ID_CLR_TRAYLIGHT);
 	RECT rect = {0, 0, width, height};
 	FillRect(hdcMem, &rect, hBrush);
 	DeleteObject(hBrush);
