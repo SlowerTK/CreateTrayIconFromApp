@@ -128,6 +128,6 @@ void SaveHotKeys(byte mod, byte other);
 void ReadHotKeys();
 void AddTrayIcon(HWND hwnd);
 void RemoveTrayIcon(HWND hwnd);
-
+std::wstring TruncateWithEllipsis(const std::wstring& text, size_t maxLen = 35);
 
 

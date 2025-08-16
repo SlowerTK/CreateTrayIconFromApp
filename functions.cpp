@@ -70,7 +70,8 @@ void UpdateTrayMenu(bool isDebug) {
 			continue;
 		}
 		UINT id = static_cast<UINT>(1000) + static_cast<UINT>(std::distance(hiddenWindows.begin(), it));
-		AppendMenu(pv.hMenu, MF_STRING, id, (pv.isDebugMode || isDebug) ? it->processName.c_str() : it->windowTitle.c_str());
+		std::wstring menuText = (pv.isDebugMode || isDebug) ? it->processName.c_str() : TruncateWithEllipsis(it->windowTitle);
+		AppendMenu(pv.hMenu, MF_STRING, id, menuText.c_str());
 		HBITMAP hBitmap = IconToBitmap(it->hIcon);
 		if (hBitmap) SetMenuItemBitmaps(pv.hMenu, id, MF_BYCOMMAND, hBitmap, hBitmap);
 		++it;
@@ -900,4 +901,9 @@ void RemoveTrayIcon(HWND hwnd) {
 		swprintf_s(buf, ET_ICON_DELETE, static_cast<UINT>(err));
 		LogAdd(buf);
 	}
+}
+std::wstring TruncateWithEllipsis(const std::wstring& text, size_t maxLen) {
+	if (text.size() <= maxLen)
+		return text;
+	return text.substr(0, maxLen - 3) + L"...";
 }
