@@ -420,6 +420,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			SendMessage(hWnd, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 			*ctrl.hWnd = hWnd;
 		}
+		EnableWindow(pv.hAddButton, 0);
+		EnableWindow(pv.hRemoveButton, 0);
 
 		SetWindowSubclass(pv.hCheckBoxButton, CheckBoxSubclassProc, 1, 0);
 		SetWindowSubclass(pv.hCheckBoxStartUp, CheckBoxSubclassProc, 1, 0);
@@ -526,83 +528,107 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		break;
 	}
 	case WM_COMMAND:
-		switch (LOWORD(wParam)) {
-		case ID_BTN_ADD:
-		{
-			LRESULT sel = SendMessage(pv.hApplicationsList, LB_GETCURSEL, NULL, NULL);
-			if (sel != LB_ERR) {
-				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hApplicationsList, LB_GETITEMDATA, sel, NULL);
-				HW->isFavorite = TRUE;
-				int i = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)HW->windowTitle.c_str());
-				SendMessage(pv.hFavoritesList, LB_SETITEMDATA, i, (LPARAM)HW);
-				SendMessage(pv.hApplicationsList, LB_DELETESTRING, sel, NULL);
-				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
-				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
+	{
+		int id = LOWORD(wParam);
+		int code = HIWORD(wParam);
+		if (code == LBN_SELCHANGE) {
+			if (id == ID_LIST_APPS) {
+				// сбрасываем выделение в правом списке
+				SendMessageW(pv.hFavoritesList, LB_SETCURSEL, (WPARAM)-1, 0);
 			}
-			break;
+			else if (id == ID_LIST_FAVORITES) {
+				// сбрасываем выделение в левом списке
+				SendMessageW(pv.hApplicationsList, LB_SETCURSEL, (WPARAM)-1, 0);
+			}
+
+			// Проверяем актуальные выделения
+			int selLeft = (int)SendMessageW(pv.hApplicationsList, LB_GETCURSEL, 0, 0);
+			int selRight = (int)SendMessageW(pv.hFavoritesList, LB_GETCURSEL, 0, 0);
+
+			EnableWindow(pv.hAddButton, selLeft != LB_ERR);
+			EnableWindow(pv.hRemoveButton, selRight != LB_ERR);
 		}
-		case ID_BTN_REMOVE:
-		{
-			LRESULT sel = SendMessage(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
-			if (sel != LB_ERR) {
-				HiddenWindow* HW = (HiddenWindow*)SendMessage(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
-				auto eraseWindow = [HW](std::vector<HiddenWindow>& vec) {
-					auto it = std::find_if(vec.begin(), vec.end(),
-						[&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
-					if (it != vec.end()) vec.erase(it);	};
-				eraseWindow(favoriteWindows);
-				eraseWindow(hiddenWindows);
-				SendMessage(pv.hFavoritesList, LB_DELETESTRING, sel, NULL);
-				SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
-				SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
-				ShowWindow(HW->hwnd, SW_SHOW);
-				SetFocus(hwnd);
-				delete HW;
-				UpdateApplicationsList();
-			}
-			break;
-		}
-		case ID_BTN_RELOAD:
-			UpdateApplicationsList();
-			break;
-		case ID_BTN_TIME_AUTOHIDE:
-			if (SendMessage(pv.hCheckBoxButton, BM_GETCHECK, 0, 0) == BST_CHECKED) {
-				EnableWindow(pv.hEditBoxText, TRUE);
-				EnableWindow(pv.hEditBox, TRUE);
-			}
-			else {
-				EnableWindow(pv.hEditBoxText, FALSE);
-				EnableWindow(pv.hEditBox, FALSE);
-			}
-			break;
-		case ID_BTN_HINT:
-			MBINFO(IX_WINDOW_HINT);
-			break;
-		case ID_EDIT_DELAY_FIELD:
-		{
-			if (HIWORD(wParam) != EN_UPDATE)
+		else
+			switch (id) {
+			case ID_BTN_ADD:
+			{
+				LRESULT sel = SendMessageW(pv.hApplicationsList, LB_GETCURSEL, NULL, NULL);
+				if (sel != LB_ERR) {
+					HiddenWindow* HW = (HiddenWindow*)SendMessageW(pv.hApplicationsList, LB_GETITEMDATA, sel, NULL);
+					HW->isFavorite = TRUE;
+					int i = (int)SendMessageW(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)HW->windowTitle.c_str());
+					SendMessageW(pv.hFavoritesList, LB_SETITEMDATA, i, (LPARAM)HW);
+					SendMessageW(pv.hApplicationsList, LB_DELETESTRING, sel, NULL);
+					SendMessageW(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
+					SendMessageW(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
+					EnableWindow(pv.hAddButton, 0);
+				}
 				break;
-			HWND hEdit = (HWND)lParam;
-			wchar_t buffer[16] = { 0 };
-			GetWindowTextW(hEdit, buffer, 16);
-			unsigned int value = wcstoul(buffer, NULL, 10);
-			unsigned int prevValue = (unsigned int)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-			if (value < 1 || value > INT_MAX) {
-				SetWindowTextW(hEdit, std::to_wstring(prevValue).c_str());
-				SendMessageW(hEdit, EM_SETSEL, 0, -1);
 			}
-			else {
-				SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)value);
-				pv.timerToHide = value;
+			case ID_BTN_REMOVE:
+			{
+				LRESULT sel = SendMessageW(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
+				if (sel != LB_ERR) {
+					HiddenWindow* HW = (HiddenWindow*)SendMessageW(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
+					auto eraseWindow = [HW](std::vector<HiddenWindow>& vec) {
+						auto it = std::find_if(vec.begin(), vec.end(),
+							[&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
+						if (it != vec.end()) vec.erase(it);	};
+					eraseWindow(favoriteWindows);
+					eraseWindow(hiddenWindows);
+					SendMessageW(pv.hFavoritesList, LB_DELETESTRING, sel, NULL);
+					SendMessageW(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
+					SendMessageW(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
+					ShowWindow(HW->hwnd, SW_SHOW);
+					delete HW;
+					SetFocus(hwnd);
+					EnableWindow(pv.hRemoveButton, 0);
+					UpdateApplicationsList();
+				}
+				break;
 			}
-		}
-		break;
-		case ID_BTN_HOTKEY_CHANGE:
-			EnableWindow(hwnd, FALSE);
-			CreateHKSettWnd();
+			case ID_BTN_RELOAD:
+				UpdateApplicationsList();
+				break;
+			case ID_BTN_TIME_AUTOHIDE:
+				if (SendMessageW(pv.hCheckBoxButton, BM_GETCHECK, 0, 0) == BST_CHECKED) {
+					EnableWindow(pv.hEditBoxText, TRUE);
+					EnableWindow(pv.hEditBox, TRUE);
+				}
+				else {
+					EnableWindow(pv.hEditBoxText, FALSE);
+					EnableWindow(pv.hEditBox, FALSE);
+				}
+				break;
+			case ID_BTN_HINT:
+				MBINFO(IX_WINDOW_HINT);
+				break;
+			case ID_EDIT_DELAY_FIELD:
+			{
+				if (HIWORD(wParam) != EN_UPDATE)
+					break;
+				HWND hEdit = (HWND)lParam;
+				wchar_t buffer[16] = { 0 };
+				GetWindowTextW(hEdit, buffer, 16);
+				unsigned int value = wcstoul(buffer, NULL, 10);
+				unsigned int prevValue = (unsigned int)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+				if (value < 1 || value > INT_MAX) {
+					SetWindowTextW(hEdit, std::to_wstring(prevValue).c_str());
+					SendMessageW(hEdit, EM_SETSEL, 0, -1);
+				}
+				else {
+					SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)value);
+					pv.timerToHide = value;
+				}
+			}
 			break;
-		}
+			case ID_BTN_HOTKEY_CHANGE:
+				EnableWindow(hwnd, FALSE);
+				CreateHKSettWnd();
+				break;
+			}
 		break;
+	}
 	case WM_CLOSE:
 		CollapseToTrayFromFavorite();
 		CheckFolderAndFile(SY_SETTINGS_FILENAME);
