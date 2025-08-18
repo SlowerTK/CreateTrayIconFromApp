@@ -76,7 +76,6 @@ LRESULT CALLBACK CheckBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 	}
 	return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
-
 LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
 	switch (msg) {
 	case WM_PAINT:
@@ -121,7 +120,7 @@ LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 
 void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
-		[&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
+						   [&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
 	if (it != favoriteWindows.end()) {
 		it->isFavorite = TRUE;
 		if (it->hwnd == FindWindow(it->className.c_str(), it->windowTitle.c_str())) {
@@ -159,7 +158,6 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 				break;
 			default:
 				pv.hk.otherKey = (byte)vk;
-				//OutputDebugStringW(std::to_wstring(pv.hk.otherKey).c_str());
 				break;
 			}
 			if (oldModKey == pv.hk.modKey && oldOtherKey == pv.hk.otherKey) {
@@ -172,7 +170,6 @@ LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 					pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
 					pv.hk.newModKey = pv.hk.modKey;
 					pv.hk.newOtherKey = pv.hk.otherKey;
-					//OutputDebugStringW((std::wstring(L"Подходящие сочетание ") + pv.hk.nameArr + L"\n").c_str());
 					UnregisterHotKey(pv.settHK, 0);
 				}
 			}
@@ -260,12 +257,12 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		return 1;
 	}
 	case WM_CTLCOLORSTATIC:
-	{
 	case WM_CTLCOLORBTN:
+	{
 		HDC hdc = (HDC)wParam;
 		SetBkMode(hdc, TRANSPARENT);
 		SetTextColor(hdc, pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK);
-		return (INT_PTR)(pv.isDark ? pv.brDark : pv.brLight);
+		return (INT_PTR)(pv.isDark ? pv.brDark : pv.brLightGray);
 	}
 	case WM_PAINT:
 	{
@@ -293,7 +290,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			HFONT hSmallFont = CreateFontIndirect(&lf);
 			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
 			RECT rect = { 0,cy - 100,cx,cy - 60 };
-			DrawTextW(hdc, IX_ALLOWED_KEYS, -1, &rect, /*DT_VCENTER |*/ DT_CENTER);
+			DrawTextW(hdc, IX_ALLOWED_KEYS, -1, &rect, DT_CENTER);
 			SelectObject(hdc, hOldFont);
 			DeleteObject(hSmallFont);
 		}
@@ -315,7 +312,8 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		}
 		DeleteObject(hBrush);
 		EndPaint(hwnd, &ps);
-	} break;
+		break;
+	}
 	case WM_COMMAND:
 		switch (LOWORD(wParam)) {
 		case ID_BTN_OK:
@@ -330,7 +328,6 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			DestroyWindow(hwnd);
 			break;
 		case ID_BTN_CANCEL:
-			//не изменять ничего
 			pv.hk.nameArr = oldNameArr;
 			SetZeroModKeysState();
 			DestroyWindow(hwnd);
@@ -344,34 +341,20 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	case WM_SETFOCUS:
 		pv.hk.isActive = true;
 		return 0;
-		//case WM_NCCALCSIZE:
-		//	return 0;
 	case WM_NCHITTEST:
 		return HTCAPTION;
-		//case WM_ACTIVATE:
-		//	if (LOWORD(wParam) == WA_ACTIVE || LOWORD(wParam) == WA_CLICKACTIVE) {
-		//		if (IsWindow(pv.settHK)) {
-		//			SetForegroundWindow(pv.settHK);
-		//			SetFocus(pv.settHK);
-		//		}
-		//	}
-		//	break;
 	case WM_CLOSE:
 		break;
 	case WM_DESTROY:
 		if (pv.hHook) UnhookWindowsHookEx(pv.hHook);
-		EnableWindow(pv.settWin/*parent*/, TRUE);
+		EnableWindow(pv.settWin, TRUE);
 		SetWindowTextW(pv.hHotKeys, pv.hk.nameArr.c_str());
 		SetActiveWindow(pv.settWin);
-		//SetForegroundWindow(pv.settWin/*parent*/);
 		pv.settHK = NULL;
 		break;
-	default:
-		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
-	return 0;
+	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
-
 static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	static unsigned int prevValue[2];
 	switch (uMsg) {
@@ -459,8 +442,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		UpdateApplicationsList();
 
 		ApplyThemeToControls(hwnd, pv.isDark);
+		break;
 	}
-	break;
 	case WM_SETTINGCHANGE:
 		if (lParam && wcscmp((LPCWSTR)lParam, L"ImmersiveColorSet") == 0) {
 			bool new_dark = IsSystemInDarkMode();
@@ -491,9 +474,6 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 
 		return (INT_PTR)(pv.isDark ? pv.brDark : pv.brLight);
 	}
-	//case WM_PAINT:
-
-	//	break;
 	case WM_SIZE:
 	{
 		int width = LOWORD(lParam);
@@ -561,8 +541,9 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 
 			EnableWindow(pv.hAddButton, selLeft != LB_ERR);
 			EnableWindow(pv.hRemoveButton, selRight != LB_ERR);
+			break;
 		}
-		else
+		else {
 			switch (id) {
 			case ID_BTN_ADD:
 			{
@@ -583,11 +564,11 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			{
 				LRESULT sel = SendMessageW(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
 				if (sel != LB_ERR) {
-					
+
 					HiddenWindow* HW = (HiddenWindow*)SendMessageW(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
 					auto eraseWindow = [HW](std::vector<HiddenWindow>& vec) {
 						auto it = std::find_if(vec.begin(), vec.end(),
-							[&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
+											   [&](const HiddenWindow& wnd) { return wnd.hwnd == HW->hwnd; });
 						if (it != vec.end()) vec.erase(it);	};
 					eraseWindow(favoriteWindows);
 					eraseWindow(hiddenWindows);
@@ -638,14 +619,14 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)value);
 					pv.timerToHide = value;
 				}
+				break;
 			}
-			break;
 			case ID_BTN_HOTKEY_CHANGE:
 				EnableWindow(hwnd, FALSE);
 				CreateHKSettWnd();
 				break;
 			}
-		break;
+		}
 	}
 	case WM_CLOSE:
 		CollapseToTrayFromFavorite();
@@ -683,10 +664,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		pv.settHK = NULL;
 		DestroyWindow(hwnd);
 		break;
-	default:
-		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
-	return 0;
+	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
@@ -726,7 +705,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				ShowWindow(hiddenWindows[index].hwnd, SW_SHOW);
 				SetForegroundWindow(hiddenWindows[index].hwnd);
 				auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
-					[&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
+									   [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
 				if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
 					it->isFavorite = ID_WND_TIMED_HIDE;
 					SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
@@ -746,12 +725,10 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				PostMessage(hwnd, WM_DESTROY, NULL, NULL);
 			}
 			PostMessage(hwnd, WM_NULL, NULL, NULL);
+			break;
 		}
-		break;
 		case WM_LBUTTONUP:
 			OpenSettings();
-			break;
-		default:
 			break;
 		}
 		break;
@@ -768,9 +745,8 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			LogAdd(IT_ICON_RECREATE);
 			AddTrayIcon(hwnd);
 		}
-		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
-	return 0;
+	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 }
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ WCHAR* lpCmdLine, _In_ int nCmdShow) {
@@ -807,9 +783,6 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		MBERROR(ET_HOTKEY_REGISTER);
 		LogAdd(ET_HOTKEY_REGISTER);
 		UnregisterHotKey(pv.trayWnd, ID_HOTKEY_HIDE_ACTIVE);
-		//ReleaseMutex(pv.hMutex);
-		//CloseHandle(pv.hMutex);
-		//return -1;
 	}
 	AddTrayIcon(pv.trayWnd);
 	{
