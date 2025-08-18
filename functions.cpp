@@ -226,7 +226,7 @@ void UpdateApplicationsList() {
 	DeleteList(pv.hApplicationsList);
 	EnumWindows(EnumWindowsUpdateAppListProc, (LPARAM)pv.hApplicationsList);
 
-	SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hApplicationsList) + 10, 0);
+	SendMessage(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
 }
 void UpdateFavoriteList() {
 	if (!pv.hFavoritesList)
@@ -238,7 +238,7 @@ void UpdateFavoriteList() {
 		int index = (int)SendMessage(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)hw.windowTitle.c_str());
 		SendMessage(pv.hFavoritesList, LB_SETITEMDATA, index, (LPARAM)HW);
 	}
-	SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, GetMaxTextWidth(pv.hFavoritesList) + 10, 0);
+	SendMessage(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
 }
 static HICON GetIcon(HWND hwnd) {
 	HICON hIcon = (HICON)SendMessage(hwnd, WM_GETICON, ICON_SMALL, 0);

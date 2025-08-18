@@ -2,7 +2,7 @@
 #include "DarkMod.hpp"
 #include <windowsx.h>
 
-LRESULT CALLBACK CheckBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+static LRESULT CALLBACK CheckBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
 	switch (msg) {
 	case WM_PAINT:
 	{
@@ -76,7 +76,7 @@ LRESULT CALLBACK CheckBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 	}
 	return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
-LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+static LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
 	switch (msg) {
 	case WM_PAINT:
 	{
@@ -118,7 +118,7 @@ LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
 }
 
 
-void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
+static void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
 						   [&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
 	if (it != favoriteWindows.end()) {
@@ -130,7 +130,7 @@ void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
 	KillTimer(hwnd, uintptr);
 }
 
-LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK KeyboardProc(int nCode, WPARAM wParam, LPARAM lParam) {
 	if (nCode >= 0 && (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN || wParam == WM_KEYUP || wParam == WM_SYSKEYUP)) {
 		KBDLLHOOKSTRUCT* kbd = (KBDLLHOOKSTRUCT*)lParam;
 		wchar_t vk = static_cast<wchar_t>(kbd->vkCode);
