@@ -90,7 +90,7 @@ static LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, L
 		FillRect(hdc, &rc, bgBrush);
 
 		wchar_t buf[256];
-		GetWindowTextW(hwnd, buf, _countof(buf));
+		GetWindowTextW(hwnd, buf, SIZEOF(buf));
 
 		HGDIOBJ oldFont = SelectObject(hdc, pv.hFont);
 		COLORREF textColor = IsWindowEnabled(hwnd)
@@ -123,7 +123,7 @@ static void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dw
 						   [&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
 	if (it != favoriteWindows.end()) {
 		it->isFavorite = TRUE;
-		if (it->hwnd == FindWindow(it->className.c_str(), it->windowTitle.c_str())) {
+		if (it->hwnd == FindWindowW(it->className.c_str(), it->windowTitle.c_str())) {
 			CollapseToTray(it->hwnd, &*it);
 		}
 	}
@@ -228,11 +228,11 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		pv.hHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandleW(NULL), 0);
 		CreateWindowExW(NULL, TX_UI_CONTROL_STATIC, NULL, WS_VISIBLE | WS_CHILD | SS_BLACKFRAME, 0, 0, cx, cy, hwnd, NULL, pv.hInstance, NULL);
 		pv.hButton1 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_SAVE, WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_OK), pv.hInstance, NULL);
-		SendMessage(pv.hButton1, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		SendMessageW(pv.hButton1, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		pv.hButton2 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_RESET, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 2), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_RESET), pv.hInstance, NULL);
-		SendMessage(pv.hButton2, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		SendMessageW(pv.hButton2, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		pv.hButton3 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_CANCEL, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, (HMENU)INT_PTR(ID_BTN_CANCEL), pv.hInstance, NULL);
-		SendMessage(pv.hButton3, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		SendMessageW(pv.hButton3, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 
 		ApplyThemeToControls(hwnd, pv.isDark);
 		return 0;
@@ -287,7 +287,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			LOGFONT lf = {};
 			GetObjectW(pv.hFont, sizeof(LOGFONT), &lf);
 			lf.lfHeight += 2;
-			HFONT hSmallFont = CreateFontIndirect(&lf);
+			HFONT hSmallFont = CreateFontIndirectW(&lf);
 			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
 			RECT rect = { 0,cy - 100,cx,cy - 60 };
 			DrawTextW(hdc, IX_ALLOWED_KEYS, -1, &rect, DT_CENTER);
@@ -298,7 +298,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			LOGFONT lf = {};
 			GetObject(pv.hFont, sizeof(LOGFONT), &lf);
 			lf.lfHeight -= 18;
-			HFONT hSmallFont = CreateFontIndirect(&lf);
+			HFONT hSmallFont = CreateFontIndirectW(&lf);
 			HFONT hOldFont = (HFONT)SelectObject(hdc, hSmallFont);
 			pv.hk.textRect = { 20, 50, cx - 20, cy - 100 };
 			SIZE textSize;
@@ -367,13 +367,13 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		prevValue[0] = static_cast<unsigned int>(pv.isHideOn);
 		prevValue[1] = pv.timerToHide;
 
-		HICON hIcon = LoadIcon(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
-		SendMessage(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
-		SendMessage(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+		HICON hIcon = LoadIconW(pv.hInstance, MAKEINTRESOURCE(IDI_ICON1));
+		SendMessageW(hwnd, WM_SETICON, ICON_SMALL, (LPARAM)hIcon);
+		SendMessageW(hwnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
 
 		NONCLIENTMETRICS ncm = { sizeof(NONCLIENTMETRICS) };
-		SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
-		pv.hFont = CreateFontIndirect(&ncm.lfMessageFont);
+		SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICS), &ncm, 0);
+		pv.hFont = CreateFontIndirectW(&ncm.lfMessageFont);
 
 		struct ControlInfo {
 			LPCWSTR className;
@@ -399,8 +399,8 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		};
 
 		for (auto& ctrl : controls) {
-			HWND hWnd = CreateWindowW(ctrl.className, ctrl.text, ctrl.style | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hwnd, ctrl.id, pv.hInstance, NULL);
-			SendMessage(hWnd, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+			HWND hWnd = CreateWindowExW(0L, ctrl.className, ctrl.text, ctrl.style | WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hwnd, ctrl.id, pv.hInstance, NULL);
+			SendMessageW(hWnd, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 			*ctrl.hWnd = hWnd;
 		}
 		EnableWindow(pv.hAddButton, 0);
@@ -409,34 +409,34 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		SetWindowSubclass(pv.hCheckBoxButton, CheckBoxSubclassProc, 1, 0);
 		SetWindowSubclass(pv.hCheckBoxStartUp, CheckBoxSubclassProc, 1, 0);
 
-		if (IsTaskScheduled(SY_APP_NAME))SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
-		else SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
+		if (IsTaskScheduled(SY_APP_NAME))SendMessageW(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
+		else SendMessageW(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
 		if (pv.isAdminMode) EnableWindow(pv.hCheckBoxStartUp, TRUE);
 
 		SetWindowSubclass(pv.hEditBoxText, StaticSubclassProc, 1, 0);
 
 		std::wstring timerStr = std::to_wstring(pv.timerToHide);
 		pv.hEditBox = CreateWindowExW(0, TX_UI_CONTROL_EDIT, timerStr.c_str(), WS_VISIBLE | WS_BORDER | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, (HMENU)INT_PTR(ID_EDIT_DELAY_FIELD), pv.hInstance, NULL);
-		SendMessage(pv.hEditBox, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		SendMessageW(pv.hEditBox, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 
 		if (pv.isHideOn) {
-			SendMessage(pv.hCheckBoxButton, BM_SETCHECK, BST_CHECKED, 0);
+			SendMessageW(pv.hCheckBoxButton, BM_SETCHECK, BST_CHECKED, 0);
 			EnableWindow(pv.hEditBoxText, TRUE);
 			EnableWindow(pv.hEditBox, TRUE);
 		}
 		else {
-			SendMessage(pv.hCheckBoxButton, BM_SETCHECK, BST_UNCHECKED, 0);
+			SendMessageW(pv.hCheckBoxButton, BM_SETCHECK, BST_UNCHECKED, 0);
 			EnableWindow(pv.hEditBoxText, FALSE);
 			EnableWindow(pv.hEditBox, FALSE);
 		}
 
 		LOGFONT lf = ncm.lfMessageFont;
 		lf.lfHeight -= 8;
-		pv.hFont = CreateFontIndirect(&lf);
-		SendMessage(pv.hHotKeys, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		pv.hFont = CreateFontIndirectW(&lf);
+		SendMessageW(pv.hHotKeys, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 		lf.lfHeight += 8;
-		pv.hFont = CreateFontIndirect(&lf);
-		SendMessage(pv.hHotKeysButton, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
+		pv.hFont = CreateFontIndirectW(&lf);
+		SendMessageW(pv.hHotKeysButton, WM_SETFONT, (WPARAM)pv.hFont, TRUE);
 
 		UpdateFavoriteList();
 		UpdateApplicationsList();
@@ -610,7 +610,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				wchar_t buffer[16] = { 0 };
 				GetWindowTextW(hEdit, buffer, 16);
 				unsigned int value = wcstoul(buffer, NULL, 10);
-				unsigned int prevValue = (unsigned int)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
+				unsigned int prevValue = static_cast<unsigned int>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 				if (value < 1 || value > INT_MAX) {
 					SetWindowTextW(hEdit, std::to_wstring(prevValue).c_str());
 					SendMessageW(hEdit, EM_SETSEL, 0, -1);
@@ -646,12 +646,12 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				if (IsDlgButtonChecked(hwnd, ID_BTN_AUTOSTART)) {
 					StartupChanging(true);
 					LogAdd(IT_AUTORUN_ADDED);
-					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
+					SendMessageW(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
 				}
 				else {
 					StartupChanging(false);
 					LogAdd(IT_AUTORUN_REMOVED);
-					SendMessage(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
+					SendMessageW(pv.hCheckBoxStartUp, BM_SETCHECK, BST_UNCHECKED, 0);
 				}
 
 			LogAdd(IT_SETTINGS_UPDATED);
@@ -722,9 +722,9 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 				UnregisterHotKey(hwnd, ID_HOTKEY_HIDE_ACTIVE);
 				LogAdd(IT_RESTARTING);
 				RestartWithAdminRights();
-				PostMessage(hwnd, WM_DESTROY, NULL, NULL);
+				PostMessageW(hwnd, WM_DESTROY, NULL, NULL);
 			}
-			PostMessage(hwnd, WM_NULL, NULL, NULL);
+			PostMessageW(hwnd, WM_NULL, NULL, NULL);
 			break;
 		}
 		case WM_LBUTTONUP:
@@ -795,9 +795,9 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		LoadNumberFromRegistry();
 	}
 	MSG msg;
-	while (GetMessage(&msg, NULL, NULL, NULL)) {
+	while (GetMessageW(&msg, NULL, NULL, NULL)) {
 		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		DispatchMessageW(&msg);
 	}
 
 	RemoveTrayIcon(pv.trayWnd);
