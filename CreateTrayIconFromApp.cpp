@@ -533,15 +533,29 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		int code = HIWORD(wParam);
 		if (code == LBN_SELCHANGE) {
 			if (id == ID_LIST_APPS) {
-				// сбрасываем выделение в правом списке
 				SendMessageW(pv.hFavoritesList, LB_SETCURSEL, (WPARAM)-1, 0);
 			}
 			else if (id == ID_LIST_FAVORITES) {
-				// сбрасываем выделение в левом списке
 				SendMessageW(pv.hApplicationsList, LB_SETCURSEL, (WPARAM)-1, 0);
+
+				LRESULT sel = SendMessageW(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
+				if (sel != LB_ERR) {
+					HiddenWindow* HW = (HiddenWindow*)SendMessageW(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
+					HWND hWndCheck = HW->hwnd;
+
+					if (!hWndCheck && !HW->className.empty() && !HW->windowTitle.empty()) {
+						hWndCheck = FindWindowW(HW->className.c_str(), HW->windowTitle.c_str());
+					}
+
+					if (IsWindow(hWndCheck)) {
+						SetWindowTextW(pv.hRemoveButton, TX_BTN_REMOVE);
+					}
+					else {
+						SetWindowTextW(pv.hRemoveButton, L"DEL");
+					}
+				}
 			}
 
-			// Проверяем актуальные выделения
 			int selLeft = (int)SendMessageW(pv.hApplicationsList, LB_GETCURSEL, 0, 0);
 			int selRight = (int)SendMessageW(pv.hFavoritesList, LB_GETCURSEL, 0, 0);
 
@@ -569,6 +583,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 			{
 				LRESULT sel = SendMessageW(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
 				if (sel != LB_ERR) {
+					
 					HiddenWindow* HW = (HiddenWindow*)SendMessageW(pv.hFavoritesList, LB_GETITEMDATA, sel, NULL);
 					auto eraseWindow = [HW](std::vector<HiddenWindow>& vec) {
 						auto it = std::find_if(vec.begin(), vec.end(),
@@ -583,11 +598,14 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 					delete HW;
 					SetFocus(hwnd);
 					EnableWindow(pv.hRemoveButton, 0);
+					SetWindowTextW(pv.hRemoveButton, TX_BTN_REMOVE);
 					UpdateApplicationsList();
 				}
 				break;
 			}
 			case ID_BTN_RELOAD:
+				EnableWindow(pv.hAddButton, 0);
+				EnableWindow(pv.hRemoveButton, 0);
 				UpdateApplicationsList();
 				break;
 			case ID_BTN_TIME_AUTOHIDE:
