@@ -352,8 +352,10 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		SetActiveWindow(pv.settWin);
 		pv.settHK = NULL;
 		break;
+	default:
+		return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 	}
-	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+	return 0;
 }
 static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	static unsigned int prevValue[2];
@@ -627,6 +629,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				break;
 			}
 		}
+		break;
 	}
 	case WM_CLOSE:
 		CollapseToTrayFromFavorite();
@@ -664,8 +667,10 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		pv.settHK = NULL;
 		DestroyWindow(hwnd);
 		break;
+	default:
+		return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 	}
-	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+	return 0;
 }
 static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
@@ -745,8 +750,9 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			LogAdd(IT_ICON_RECREATE);
 			AddTrayIcon(hwnd);
 		}
+		return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 	}
-	return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+	return 0;
 }
 
 int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ WCHAR* lpCmdLine, _In_ int nCmdShow) {
