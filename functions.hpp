@@ -4,12 +4,12 @@
 #include <windows.h>
 #include "resource.h"
 #include <algorithm>
-#include <comdef.h>
 #include <Wbemidl.h>
 #include <Psapi.h>
 #include <ShlObj.h>
 #include <sstream>
 #include <iomanip>
+#include <map>
 #pragma comment(lib, "wbemuuid.lib")
 
 #include <taskschd.h>
@@ -17,16 +17,38 @@
 #include <atlbase.h>
 #pragma comment(lib, "taskschd.lib")
 #pragma comment(lib, "comsupp.lib")
+
+#include <commctrl.h>
+#include <uxtheme.h>
+#include <vssym32.h>
+#pragma comment(linker,"\"/manifestdependency:type='win32' \
+name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#pragma comment(lib, "comctl32.lib")
+#pragma comment(lib, "uxtheme.lib")
+
+struct HotKeys {
+	std::wstring nameArr;
+	byte modKey, otherKey, newModKey, newOtherKey;
+	bool canSet, isFixed, isActive;
+	RECT textRect;
+};
 struct ProgramVariable {
-	HWND settWin, settTimer;
-	WNDCLASS wc1, wc2, wc3;
+	HWND trayWnd, settWin, settHK;
+	LPCWSTR wc1, wc2, wc3;
 	HINSTANCE hInstance;
 	HMENU hMenu, hSettMenu, hSettSubMenu;
-	HWND hApplicationsList, hFavoritesList, hAddButton, hRemoveButton, hText, hReloadButton;
+	HWND hAppText, hApplicationsList, hFavoritesList, hAddButton, hRemoveButton,
+		hFavText, hReloadButton, hCheckBoxStartUp, hCheckBoxButton, hCheckBoxHint,
+		hEditBoxText, hEditBox, hHotKeysText, hHotKeys, hHotKeysButton, hButton1, hButton2, hButton3;
 	HANDLE hMutex;
+	HFONT hFont;
+	HHOOK hHook;
 	UINT WM_TASKBAR_CREATED;
 	unsigned int timerToHide;
-	bool isDebugMode, isAdminMode;
+	HotKeys hk;
+	bool isDebugMode, isAdminMode, isHideOn, isDark;
+	HBRUSH brDark, brDarkGray, brLight, brLightGray;
 };
 struct HiddenWindow {
 	HWND hwnd = 0;
@@ -41,7 +63,6 @@ struct HiddenWindow {
 extern std::vector<HiddenWindow> hiddenWindows;
 extern std::vector<HiddenWindow> favoriteWindows;
 
-
 extern ProgramVariable pv;
 
 static std::wstring exceptionProcessNames[] = {
@@ -54,27 +75,22 @@ static std::wstring exceptionProcessNames[] = {
 	L"PowerToys.PowerLauncher.exe", //PowerToys Run
 	L"ApplicationFrameHost.exe", //Параметры
 	L"SystemSettings.exe", //Параметры
-
-			//L"Shell_TrayWnd", //Панель задач
-			//L"Progman", //Рабочий стол
-			//L"TaskManagerWindow", //Диспетчер задач
-			//L"TopLevelWindowForOverflowXamlIsland", //Скрытая панель трея
-			//L"WinUIDesktopWin32WindowClass", //Всплывающие окно трея у приложений использующих WinUI3
-			//L"SystemTray_Main", //Всплывающие окно трея у системных приложений
-			//L"Windows.UI.Core.CoreWindow",//Другие окна UI Windows
-			//L"WindowsDashboard", //Панель слева
-			//L"CTRIFATrayApp", //myself
-			//L"CTIFA Settings", //myself2
-			//L"Xaml_WindowedPopupClass" //Предпросмотр окна
+};
+static std::wstring exceptionClassNames[] = {
+	L"",
+	SY_CLASS_TRAY,
+	SY_CLASS_SETTINGS,
+	SY_CLASS_TIMERSET
 };
 
-WNDCLASS RegisterNewClass(LPCWSTR className, WNDPROC wndproc, COLORREF color);
+LPCWSTR RegisterNewClass(LPCWSTR className, WNDPROC wndproc);
 bool isRunAsAdmin();
 void DebugModCheck(wchar_t* lpCmdLine);
 static HBITMAP IconToBitmap(HICON hIcon);
 void OpenSettings();
 void UpdateTrayMenu(bool isDebug);
 void CloseApp();
+int GetMaxTextWidth(HWND hwndListBox);
 void UpdateApplicationsList();
 void UpdateFavoriteList();
 void CollapseToTray(HWND hwnd, HiddenWindow* HW = nullptr);
@@ -101,6 +117,17 @@ bool IsTaskScheduled(const std::wstring& taskName);
 void DeleteScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName);
 void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& taskName, const std::wstring& exePath);
 void StartupChanging(bool isAdd);
-void CreateTimerSettWnd();
+void CreateHKSettWnd();
 void LoadNumberFromRegistry();
-void SaveNumberToRegistry();
+void SaveToRegistry(bool a, bool b);
+void SetZeroModKeysState();
+void SetZeroModKeysState(BYTE* keyState);
+void RegHotKey(UINT mod, UINT other, int id);
+std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey);
+void SaveHotKeys(byte mod, byte other);
+void ReadHotKeys();
+void AddTrayIcon(HWND hwnd);
+void RemoveTrayIcon(HWND hwnd);
+std::wstring TruncateWithEllipsis(const std::wstring& text, size_t maxLen = 35);
+
+
