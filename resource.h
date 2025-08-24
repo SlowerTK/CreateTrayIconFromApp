@@ -1,4 +1,8 @@
-﻿#define IDI_ICON1                       101
+﻿//{{NO_DEPENDENCIES}}
+// Включаемый файл, созданный в Microsoft Visual C++.
+// Используется CreateTrayIconFromApp.rc
+//
+#define IDI_ICON1                       101
 //
 //
 //

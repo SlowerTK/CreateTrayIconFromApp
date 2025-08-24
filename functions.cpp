@@ -455,6 +455,7 @@ void deserializeFromWstring(const std::wstring& str) {
 	while (std::getline(iss, line)) {
 		if (*line.c_str() != L'\0') {
 			result.push_back(deserializeOne(line));
+			line.clear();
 		}
 	}
 	favoriteWindows = result;
