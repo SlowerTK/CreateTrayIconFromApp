@@ -500,16 +500,16 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 		MoveWindow(pv.hHotKeysButton, rightCorner, height - height / 3 + 60, fixedWidth, 30, TRUE);
 
 		InvalidateRect(hwnd, NULL, TRUE);
+		InvalidateRect(pv.hFavoritesList, NULL, TRUE);
+		InvalidateRect(pv.hAddButton, NULL, TRUE);
+		InvalidateRect(pv.hRemoveButton, NULL, TRUE);
 		break;
 	}
-	case WM_GETMINMAXINFO:
-	{
-		MINMAXINFO* mmi = (MINMAXINFO*)lParam;
 		mmi->ptMinTrackSize.x = CONST_WND_WIDTH;
 		mmi->ptMinTrackSize.y = CONST_WND_HEIGHT;
-		break;
-	}
-	case WM_COMMAND:
+		MINMAXINFO* mmi = (MINMAXINFO*)lParam;
+		mmi->ptMinTrackSize.x = 600;
+		mmi->ptMinTrackSize.y = 375;
 	{
 		int id = LOWORD(wParam);
 		int code = HIWORD(wParam);
@@ -629,12 +629,12 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 				break;
 			}
 		}
+	case WM_TIMER:
+		UpdateApplicationsList();
+		//CollapseToTrayFromFavorite();
 		break;
-	}
-	case WM_CLOSE:
-		CollapseToTrayFromFavorite();
 		CheckFolderAndFile(SY_SETTINGS_FILENAME);
-		{
+	}
 			std::wstring favorite{};
 			for (const auto& vec : favoriteWindows)
 				favorite += serializeToWstring(vec);
@@ -659,20 +659,20 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 
 			LogAdd(IT_SETTINGS_UPDATED);
 			CheckAndDeleteOldLogs(GetCurrentDate() + SY_FILE_EXTENSION);
-		}
-		DeleteList(pv.hApplicationsList);
-		DeleteList(pv.hFavoritesList);
+				favorite += serializeToString(vec);
+			}
+			WriteSettingsFile(favorite);
 		DeleteObject(pv.hFont);
-		pv.settWin = NULL;
+		DeleteList(pv.hApplicationsList);
 		pv.settHK = NULL;
+		DeleteList(pv.hFavoritesList);
+		KillTimer(pv.settWin, TID_UPDATE);
+		pv.settWin = NULL;
 		DestroyWindow(hwnd);
 		break;
 	default:
 		return DefWindowProcW(hwnd, uMsg, wParam, lParam);
 	}
-	return 0;
-}
-static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	switch (uMsg) {
 	case WM_CREATE:
 		pv.brDark = CreateSolidBrush(ID_CLR_DARK);
@@ -686,41 +686,41 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 		for (auto& fw : favoriteWindows) {//наверное лучше сделать отдельный поток под это действие
 			FindWindowFromFile(fw, false);
 		}
+			CollapseToTray(activeWnd);
+			break;
+		case HK_FBL_ID:
+			ScaleToFS(activeWnd);
+			break;
+		default:
+			break;
+		}
 		break;
 	case WM_HOTKEY:
-	{
-		HWND activeWnd = GetForegroundWindow();
-		if (!activeWnd)	return 0;
-		if (wParam == ID_HOTKEY_HIDE_ACTIVE) CollapseToTray(activeWnd);
-		break;
-	}
-	case TRAY_ICON_MESSAGE:
-		switch (lParam) {
 		case WM_RBUTTONUP:
 		{
 			RefreshDarkMenuTheme();
 			bool isDebug = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-			POINT cursorPos;
-			GetCursorPos(&cursorPos);
-			SetForegroundWindow(hwnd);
+		HWND activeWnd = GetForegroundWindow();
+		if (!activeWnd)	return 0;
+		if (wParam == ID_HOTKEY_HIDE_ACTIVE) CollapseToTray(activeWnd);
 			UpdateTrayMenu(isDebug);
 			int cmd = TrackPopupMenu(pv.hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_CENTERALIGN, cursorPos.x, cursorPos.y, NULL, hwnd, NULL);
-			if (cmd >= 1000 && cmd < 1000 + hiddenWindows.size()) {
-				int index = cmd - 1000;
-				ShowWindow(hiddenWindows[index].hwnd, SW_SHOW);
-				SetForegroundWindow(hiddenWindows[index].hwnd);
+	case TRAY_ICON_MESSAGE:
+		switch (lParam) {
+		case WM_RBUTTONUP: {
+			POINT cursorPos;
 				auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
 									   [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
 				if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
 					it->isFavorite = ID_WND_TIMED_HIDE;
 					SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
 				}
-				hiddenWindows.erase(hiddenWindows.begin() + index);
-			}
-			else if (cmd == ID_TRAY_EXIT)
-				CloseApp();
-			else if (cmd == ID_TRAY_SETTINGS)
-				OpenSettings();
+			GetCursorPos(&cursorPos);
+			SetForegroundWindow(hwnd);
+			UpdateTrayMenu();
+			int cmd = TrackPopupMenu(pv.hMenu, TPM_RETURNCMD | TPM_NONOTIFY, cursorPos.x, cursorPos.y, 0, hwnd, NULL);
+			if (cmd >= 1000 && cmd < 1000 + hiddenWindows.size()) {
+				int index = cmd - 1000;
 			else if (cmd == ID_TRAY_RESTART) {
 				ReleaseMutex(pv.hMutex);
 				CloseHandle(pv.hMutex);
@@ -733,37 +733,37 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			break;
 		}
 		case WM_LBUTTONUP:
-			OpenSettings();
-			break;
-		}
-		break;
-	case WM_DESTROY:
+			}
+			else if (cmd == ID_TRAY_EXIT)
+				CloseApp();
+			else if (cmd == ID_TRAY_SETTINGS)
+				OpenSettings();
 		KillTimer(hwnd, ID_TIMER_AUTOHIDE);
 		DeleteObject(pv.brDark);
 		DeleteObject(pv.brDarkGray);
 		DeleteObject(pv.brLight);
 		DeleteObject(pv.brLightGray);
-		CloseApp();
-		break;
-	default:
+			break;
+		}
+		case WM_LBUTTONUP:
 		if (uMsg == pv.WM_TASKBAR_CREATED) {
 			LogAdd(IT_ICON_RECREATE);
 			AddTrayIcon(hwnd);
 		}
 		return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-	}
-	return 0;
-}
-
-int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ WCHAR* lpCmdLine, _In_ int nCmdShow) {
+			break;
+		}
+		break;
+	case WM_DESTROY:
+		CloseApp();
 	pv.hMutex = CreateMutexW(NULL, TRUE, SY_APP_NAME);
 	if (pv.hMutex == NULL || GetLastError() == ERROR_ALREADY_EXISTS) {
 		LogAdd(WT_ALREADY_RUNNING);
 		if (pv.hMutex)
 			CloseHandle(pv.hMutex);
-		return 1;
+		return DefWindowProc(hwnd, uMsg, wParam, lParam);
 	}
-	pv.hInstance = hInstance;
+	return 0;
 	pv.isAdminMode = isRunAsAdmin();
 	if (!pv.isAdminMode) {
 		LogAdd(IT_ADMIN_MISSING);
@@ -777,21 +777,21 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	InitCommonControlsEx(&icc);
 	InitDarkMode();
 	pv.isDark = IsSystemInDarkMode();
-
+		return 1;
 	pv.wc1 = RegisterNewClass(SY_CLASS_TRAY, TrayProc);
 	pv.wc2 = RegisterNewClass(SY_CLASS_SETTINGS, SettingsProc);
 	pv.wc3 = RegisterNewClass(SY_CLASS_TIMERSET, HKSettProc);
 	pv.trayWnd = CreateWindowExW(0, pv.wc1, pv.wc1, NULL, NULL, NULL, NULL, NULL, NULL, NULL, pv.hInstance, NULL);
-
+		MBATTENTION(WT_ADMIN);
 	ReadHotKeys();
 	bool isCanCTIFA = RegisterHotKey(pv.trayWnd, ID_HOTKEY_HIDE_ACTIVE, pv.hk.modKey, pv.hk.otherKey);
 	if (!isCanCTIFA) {
 		MBERROR(ET_HOTKEY_REGISTER);
 		LogAdd(ET_HOTKEY_REGISTER);
 		UnregisterHotKey(pv.trayWnd, ID_HOTKEY_HIDE_ACTIVE);
-	}
-	AddTrayIcon(pv.trayWnd);
-	{
+	bool isCanCTIFA = RegisterHotKey(hwnd, HK_CTIFA_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'H');
+	bool isCanFBL = RegisterHotKey(hwnd, HK_FBL_ID, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_F6);
+	if (!isCanCTIFA || !isCanFBL) {
 		CheckFolderAndFile(SY_SETTINGS_FILENAME);
 		std::wstring favorites = ReadSettingsFile();
 		if (!favorites.empty())
@@ -799,13 +799,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 		CheckAndDeleteOldLogs(GetCurrentDate() + SY_FILE_EXTENSION);
 
 		LoadNumberFromRegistry();
+		return -1;
 	}
-	MSG msg;
 	while (GetMessageW(&msg, NULL, NULL, NULL)) {
-		TranslateMessage(&msg);
-		DispatchMessageW(&msg);
-	}
-
+	{
+		CheckFolderAndFile();
+		std::string favorites = ReadSettingsFile();
+		if (favorites.size())
 	RemoveTrayIcon(pv.trayWnd);
 	UnregisterHotKey(pv.trayWnd, ID_HOTKEY_HIDE_ACTIVE);
 	UnregisterClassW(pv.wc1, pv.hInstance);
@@ -814,5 +814,13 @@ int WINAPI wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, 
 	ReleaseMutex(pv.hMutex);
 	CloseHandle(pv.hMutex);
 	LogAdd(IT_SHUTDOWN);
+	}
+
+	Shell_NotifyIcon(NIM_DELETE, &nid);
+	UnregisterHotKey(hwnd, HK_CTIFA_ID);
+	UnregisterHotKey(hwnd, HK_FBL_ID);
+	UnregisterClass(pv.wc1.lpszClassName, pv.wc1.hInstance);
+	UnregisterClass(pv.wc2.lpszClassName, pv.wc2.hInstance);
+	ReleaseMutex(hMutex);
 	return 0;
 }
