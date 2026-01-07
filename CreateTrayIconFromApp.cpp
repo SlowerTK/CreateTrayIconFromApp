@@ -705,29 +705,35 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 			SetForegroundWindow(hwnd);
 			UpdateTrayMenu(isDebug);
 			int cmd = TrackPopupMenu(pv.hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_CENTERALIGN, cursorPos.x, cursorPos.y, NULL, hwnd, NULL);
-			if (cmd >= 1000 && cmd < 1000 + hiddenWindows.size()) {
-				int index = cmd - 1000;
-				ShowWindow(hiddenWindows[index].hwnd, SW_SHOW);
-				SetForegroundWindow(hiddenWindows[index].hwnd);
-				auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
-									   [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
-				if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
-					it->isFavorite = ID_WND_TIMED_HIDE;
-					SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
-				}
-				hiddenWindows.erase(hiddenWindows.begin() + index);
-			}
-			else if (cmd == ID_TRAY_EXIT)
+			switch (cmd) {
+			case ID_TRAY_EXIT:
 				CloseApp();
-			else if (cmd == ID_TRAY_SETTINGS)
+				break;
+			case ID_TRAY_SETTINGS:
 				OpenSettings();
-			else if (cmd == ID_TRAY_RESTART) {
+				break;
+			case ID_TRAY_RESTART:
 				ReleaseMutex(pv.hMutex);
 				CloseHandle(pv.hMutex);
 				UnregisterHotKey(hwnd, ID_HOTKEY_HIDE_ACTIVE);
 				LogAdd(IT_RESTARTING);
 				RestartWithAdminRights();
 				PostMessageW(hwnd, WM_DESTROY, NULL, NULL);
+				break;
+			default:
+				if (cmd >= 1000 && cmd < 1000 + hiddenWindows.size()) {
+					int index = cmd - 1000;
+					ShowWindow(hiddenWindows[index].hwnd, SW_SHOW);
+					SetForegroundWindow(hiddenWindows[index].hwnd);
+					auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
+										   [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
+					if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
+						it->isFavorite = ID_WND_TIMED_HIDE;
+						SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
+					}
+					hiddenWindows.erase(hiddenWindows.begin() + index);
+				}
+				break;
 			}
 			PostMessageW(hwnd, WM_NULL, NULL, NULL);
 			break;
