@@ -1,6 +1,5 @@
-﻿#include "functions.hpp"
+﻿#include "Functions.hpp"
 #include "DarkMod.hpp"
-#include <windowsx.h>
 
 static LRESULT CALLBACK CheckBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
 	switch (msg) {

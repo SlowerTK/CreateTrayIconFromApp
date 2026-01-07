@@ -147,12 +147,31 @@
   <ItemGroup>
     <ClCompile Include="CreateTrayIconFromApp.cpp" />
     <ClCompile Include="DarkMod.cpp" />
-    <ClCompile Include="functions.cpp" />
+    <ClCompile Include="FileManager.cpp" />
+    <ClCompile Include="HotkeysManager.cpp" />
+    <ClCompile Include="Logger.cpp" />
+    <ClCompile Include="ProcessManager.cpp" />
+    <ClCompile Include="StartupManager.cpp" />
+    <ClCompile Include="Types.cpp" />
+    <ClCompile Include="UIManager.cpp" />
+    <ClCompile Include="Utils.cpp" />
+    <ClCompile Include="WindowManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AppConstants.hpp" />
+    <ClInclude Include="Constants.hpp" />
     <ClInclude Include="DarkMod.hpp" />
-    <ClInclude Include="functions.hpp" />
+    <ClInclude Include="FileManager.hpp" />
+    <ClInclude Include="Functions.hpp" />
+    <ClInclude Include="HotkeysManager.hpp" />
+    <ClInclude Include="Types.hpp" />
+    <ClInclude Include="Logger.hpp" />
+    <ClInclude Include="ProcessManager.hpp" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="StartupManager.hpp" />
+    <ClInclude Include="UIManager.hpp" />
+    <ClInclude Include="Utils.hpp" />
+    <ClInclude Include="WindowManager.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="icon.ico" />
