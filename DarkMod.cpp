@@ -16,10 +16,10 @@ int(__cdecl* RefreshImmersiveColorPolicyState)(void) = nullptr;
 void InitDarkMode() {
 	HMODULE hUx = LoadLibraryW(L"uxtheme.dll");
 	if (hUx) {
-		SetPreferredAppMode = (int(__cdecl*)(int))GetProcAddress(hUx, MAKEINTRESOURCEA(135));
-		AllowDarkModeForWindow = (int(__cdecl*)(HWND, int))GetProcAddress(hUx, MAKEINTRESOURCEA(133));
-		FlushMenuThemes = (int(__cdecl*)(void))GetProcAddress(hUx, MAKEINTRESOURCEA(136));
-		RefreshImmersiveColorPolicyState = (int(__cdecl*)(void))GetProcAddress(hUx, MAKEINTRESOURCEA(104));
+		SetPreferredAppMode = reinterpret_cast<int(__cdecl*)(int)>(GetProcAddress(hUx, MAKEINTRESOURCEA(135)));
+		AllowDarkModeForWindow = reinterpret_cast<int(__cdecl*)(HWND, int)>(GetProcAddress(hUx, MAKEINTRESOURCEA(133)));
+		FlushMenuThemes = reinterpret_cast<int(__cdecl*)(void)>(GetProcAddress(hUx, MAKEINTRESOURCEA(136)));
+		RefreshImmersiveColorPolicyState = reinterpret_cast<int(__cdecl*)(void)>(GetProcAddress(hUx, MAKEINTRESOURCEA(104)));
 
 		if (SetPreferredAppMode)
 			SetPreferredAppMode(0); // 0: Default, will follow system
@@ -31,8 +31,8 @@ bool IsSystemInDarkMode() {
 	DWORD value = 0;
 	DWORD size = sizeof(value);
 	if (SHGetValueW(HKEY_CURRENT_USER,
-		L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-		L"AppsUseLightTheme", NULL, &value, &size) == ERROR_SUCCESS) {
+					L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+					L"AppsUseLightTheme", NULL, &value, &size) == ERROR_SUCCESS) {
 		return value == 0;
 	}
 	return false; // fallback to light

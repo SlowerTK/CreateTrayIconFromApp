@@ -2,7 +2,7 @@
 #include "functions.hpp"
 std::vector<HiddenWindow> hiddenWindows = {};
 std::vector<HiddenWindow> favoriteWindows = {};
-ProgramVariable pv = {0};
+ProgramVariable pv = { 0 };
 LPCWSTR RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
 	WNDCLASS wc;
 	ZeroMemory(&wc, sizeof(wc));
@@ -10,7 +10,7 @@ LPCWSTR RegisterNewClass(LPCWSTR className, WNDPROC wndproc) {
 	wc.hInstance = pv.hInstance;
 	wc.lpfnWndProc = wndproc;
 	wc.hbrBackground = nullptr;
-	wc.hCursor = (HCURSOR)LoadImageW(NULL, IDC_ARROW, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+	wc.hCursor = reinterpret_cast<HCURSOR>(LoadImageW(NULL, IDC_ARROW, IMAGE_CURSOR, 0, 0, LR_DEFAULTSIZE | LR_SHARED));
 	RegisterClassW(&wc);
 	return wc.lpszClassName;
 }
@@ -50,9 +50,9 @@ static HBITMAP IconToBitmap(HICON hIcon) {
 	HDC hdcScreen = GetDC(NULL);
 	HDC hdcMem = CreateCompatibleDC(hdcScreen);
 	HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
-	HBITMAP hOldBitmap = (HBITMAP)SelectObject(hdcMem, hBitmap);
+	HBITMAP hOldBitmap = static_cast<HBITMAP>(SelectObject(hdcMem, hBitmap));
 	HBRUSH hBrush = pv.isDark ? CreateSolidBrush(ID_CLR_TRAYGRAY) : CreateSolidBrush(ID_CLR_TRAYLIGHT);
-	RECT rect = {0, 0, width, height};
+	RECT rect = { 0, 0, width, height };
 	FillRect(hdcMem, &rect, hBrush);
 	DeleteObject(hBrush);
 	DrawIconEx(hdcMem, 0, 0, hIcon, width, height, 0, 0, DI_NORMAL);
@@ -107,7 +107,7 @@ static std::wstring GetProcessCommandLine(DWORD processID) {
 	}
 
 	IWbemLocator* pLoc = NULL;
-	hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, (LPVOID*)&pLoc);
+	hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, IID_IWbemLocator, reinterpret_cast<LPVOID*>(&pLoc));
 	if (FAILED(hres)) {
 		CoUninitialize();
 		LogAdd(ET_WMI_CREATE);
@@ -173,13 +173,13 @@ static std::wstring GetProcessCommandLine(DWORD processID) {
 }
 int GetMaxTextWidth(HWND hwndListBox) {
 	HDC hdc = GetDC(hwndListBox);
-	HFONT hOldFont = (HFONT)SelectObject(hdc, pv.hFont);
-	int count = (int)SendMessageW(hwndListBox, LB_GETCOUNT, 0, 0);
+	HFONT hOldFont = static_cast<HFONT>(SelectObject(hdc, pv.hFont));
+	int count = static_cast<int>(SendMessageW(hwndListBox, LB_GETCOUNT, 0, 0));
 	SIZE sz = { 0 };
 	int maxWidth = 0;
 	for (int i = 0; i < count; ++i) {
 		wchar_t buffer[1024]{};
-		SendMessageW(hwndListBox, LB_GETTEXT, i, (LPARAM)buffer);
+		SendMessageW(hwndListBox, LB_GETTEXT, i, reinterpret_cast<LPARAM>(buffer));
 		GetTextExtentPoint32W(hdc, buffer, lstrlenW(buffer), &sz);
 		if (sz.cx > maxWidth)
 			maxWidth = sz.cx;
@@ -189,8 +189,8 @@ int GetMaxTextWidth(HWND hwndListBox) {
 	return maxWidth;
 }
 static BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
-	HWND hApplicationsList = (HWND)lParam;
-	wchar_t windowTitle[MAX_PATH] = {0};
+	HWND hApplicationsList = reinterpret_cast<HWND>(lParam);
+	wchar_t windowTitle[MAX_PATH] = { 0 };
 
 	if (IsWindowVisible(hwnd) && GetWindowTextW(hwnd, windowTitle, SIZEOF(windowTitle)) > 0) {
 		std::wstring className = GetWstringClassName(hwnd);
@@ -201,7 +201,7 @@ static BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
 		if (processName.empty())
 			return true;
 
-		int count = (int)SendMessageW(pv.hFavoritesList, LB_GETCOUNT, NULL, NULL);
+		int count = static_cast<int>(SendMessageW(pv.hFavoritesList, LB_GETCOUNT, NULL, NULL));
 		for (int i = 0; i < count; i++) {
 			HiddenWindow* hw = reinterpret_cast<HiddenWindow*>(SendMessageW(pv.hFavoritesList, LB_GETITEMDATA, i, NULL));
 			if (hw->processName == processName && hw->hwnd == hwnd)
@@ -215,8 +215,8 @@ static BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
 		HW->processID = processID;
 		HW->processName = processName;
 		HW->isFavorite = false;
-		int index = (int)SendMessageW(hApplicationsList, LB_ADDSTRING, NULL, (LPARAM)windowTitle);
-		SendMessageW(hApplicationsList, LB_SETITEMDATA, index, (LPARAM)HW);
+		int index = static_cast<int>(SendMessageW(hApplicationsList, LB_ADDSTRING, NULL, reinterpret_cast<LPARAM>(windowTitle)));
+		SendMessageW(hApplicationsList, LB_SETITEMDATA, index, reinterpret_cast<LPARAM>(HW));
 	}
 	return true;
 }
@@ -224,7 +224,7 @@ void UpdateApplicationsList() {
 	if (!pv.hApplicationsList)
 		return;
 	DeleteList(pv.hApplicationsList);
-	EnumWindows(EnumWindowsUpdateAppListProc, (LPARAM)pv.hApplicationsList);
+	EnumWindows(EnumWindowsUpdateAppListProc, reinterpret_cast<LPARAM>(pv.hApplicationsList));
 
 	SendMessageW(pv.hApplicationsList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hApplicationsList)) + 10, 0);
 }
@@ -235,15 +235,15 @@ void UpdateFavoriteList() {
 	for (const auto& hw : favoriteWindows) {
 		HiddenWindow* HW = new HiddenWindow;
 		*HW = hw;
-		int index = (int)SendMessageW(pv.hFavoritesList, LB_ADDSTRING, NULL, (LPARAM)hw.windowTitle.c_str());
-		SendMessageW(pv.hFavoritesList, LB_SETITEMDATA, index, (LPARAM)HW);
+		int index = static_cast<int>(SendMessageW(pv.hFavoritesList, LB_ADDSTRING, NULL, reinterpret_cast<LPARAM>(hw.windowTitle.c_str())));
+		SendMessageW(pv.hFavoritesList, LB_SETITEMDATA, index, reinterpret_cast<LPARAM>(HW));
 	}
 	SendMessageW(pv.hFavoritesList, LB_SETHORIZONTALEXTENT, static_cast<WPARAM>(GetMaxTextWidth(pv.hFavoritesList)) + 10, 0);
 }
 static HICON GetIcon(HWND hwnd) {
-	HICON hIcon = (HICON)SendMessageW(hwnd, WM_GETICON, ICON_SMALL, 0);
+	HICON hIcon = reinterpret_cast<HICON>(SendMessageW(hwnd, WM_GETICON, ICON_SMALL, 0));
 	if (!hIcon) {
-		hIcon = (HICON)GetClassLongPtrW(hwnd, GCLP_HICONSM);
+		hIcon = reinterpret_cast<HICON>(GetClassLongPtrW(hwnd, GCLP_HICONSM));
 		if (!hIcon) {
 			hIcon = LoadIconW(NULL, IDI_APPLICATION);
 		}
@@ -265,7 +265,7 @@ void CollapseToTray(HWND hwnd, HiddenWindow* HW) {
 		std::wstring className = GetWstringClassName(hwnd);
 		if (className.empty())
 			return;
-		hiddenWindows.push_back({hwnd, GetIcon(hwnd), processID, false, GetWindowTitle(hwnd), className, processName, GetProcessCommandLine(processID)});
+		hiddenWindows.push_back({ hwnd, GetIcon(hwnd), processID, false, GetWindowTitle(hwnd), className, processName, GetProcessCommandLine(processID) });
 	} else {
 		HW->hIcon = GetIcon(hwnd);
 		hiddenWindows.push_back(*HW);
@@ -321,7 +321,7 @@ DWORD GetProcessId(HWND hwnd) {
 }
 std::wstring GetAllowedProcessName(DWORD processID) {
 	std::wstring processName = {};
-	wchar_t processNam[MAX_PATH] = {0};
+	wchar_t processNam[MAX_PATH] = { 0 };
 	HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, processID);
 	if (hProcess) {
 		HMODULE hMod;
@@ -378,7 +378,7 @@ std::wstring ReadSettingsFile() {
 	}
 	std::wstring content(fileSize.QuadPart, L'\0');
 	DWORD bytesRead;
-	if (!ReadFile(hFile, &content[0], (DWORD)fileSize.QuadPart, &bytesRead, NULL) || bytesRead != fileSize.QuadPart) {
+	if (!ReadFile(hFile, &content[0], static_cast<DWORD>(fileSize.QuadPart), &bytesRead, NULL) || bytesRead != fileSize.QuadPart) {
 		MBATTENTION(ET_FILE_READ);
 		CloseHandle(hFile);
 		return{};
@@ -463,7 +463,7 @@ void deserializeFromWstring(const std::wstring& str) {
 void RestartWithAdminRights() {
 	wchar_t szPath[MAX_PATH];
 	GetModuleFileNameW(NULL, szPath, MAX_PATH);
-	SHELLEXECUTEINFO sei = {0};
+	SHELLEXECUTEINFO sei = { 0 };
 	sei.cbSize = sizeof(sei);
 	sei.fMask = SEE_MASK_NOCLOSEPROCESS;
 	sei.hwnd = NULL;
@@ -495,7 +495,7 @@ void CheckAndDeleteOldLogs(const std::wstring& currentLogFile) {
 	if (hFind == INVALID_HANDLE_VALUE) return;
 	do {
 		if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) && findFileData.cFileName != currentLogFile)
-			logFiles.push_back({findFileData.cFileName, findFileData.ftLastWriteTime});
+			logFiles.push_back({ findFileData.cFileName, findFileData.ftLastWriteTime });
 	} while (FindNextFileW(hFind, &findFileData) != 0);
 	FindClose(hFind);
 	if (logFiles.size() > 7) {
@@ -642,7 +642,7 @@ void CreateScheduledTask(CComPtr<ITaskService>& pService, const std::wstring& ta
 	pActionCollection->Create(TASK_ACTION_EXEC, &pAction);
 
 	CComPtr<IExecAction> pExecAction;
-	pAction->QueryInterface(IID_IExecAction, (void**)&pExecAction);
+	pAction->QueryInterface(IID_IExecAction, reinterpret_cast<void**>(&pExecAction));
 	pExecAction->put_Path(_bstr_t(exePath.c_str()));
 
 	CComPtr<ITaskSettings> pSettings;
@@ -702,7 +702,6 @@ void CreateHKSettWnd() {
 		int x = rect.left + ((rect.right - rect.left) >> 1) - (cx >> 1);
 		int y = rect.top + ((rect.bottom - rect.top) >> 1) - (cy >> 1);
 		pv.settHK = CreateWindowExW(NULL, pv.wc3, TX_PRESS_HOTKEY, WS_SYSMENU | WS_POPUP | WS_VISIBLE, x, y, cx, cy, pv.settWin, NULL, pv.hInstance, NULL);
-		//SetWindowLongPtr(pv.settHK, GWLP_HWNDPARENT, (LONG_PTR)pv.settWin);
 		SetForegroundWindow(pv.settHK);
 	}
 }
@@ -782,8 +781,8 @@ void RegHotKey(UINT mod, UINT other, int id) {
 std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 	std::wstring result;//
 	if (modKeys) {
-		static const std::wstring sysVk[] = {L"Ctrl", L"Win", L"Alt", L"Shift"};
-		static const byte MODKEYS[] = {MOD_CONTROL, MOD_WIN, MOD_ALT, MOD_SHIFT};
+		static const std::wstring sysVk[] = { L"Ctrl", L"Win", L"Alt", L"Shift" };
+		static const byte MODKEYS[] = { MOD_CONTROL, MOD_WIN, MOD_ALT, MOD_SHIFT };
 		for (int i = 0; i < sizeof(sysVk) / sizeof(sysVk[0]); i++)
 			if (modKeys & MODKEYS[i]) {
 				if (!result.empty()) result += L" + ";
@@ -831,7 +830,7 @@ std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
 		if (GetKeyboardState(keyState)) {}
 		keyState[20] = 1;
 		SetZeroModKeysState(keyState);
-		wchar_t buffer[5] = {0};
+		wchar_t buffer[5] = { 0 };
 		int len = ToUnicode(otherKey, MapVirtualKeyW(otherKey, MAPVK_VK_TO_VSC), keyState, buffer, 5, 0);
 		if (len == 1) {
 			result += buffer;
