@@ -154,7 +154,7 @@ enum class FavoriteState : DWORD {
 };
 
 enum ControlID {
-    ListApps, //Список всех окон
+    ListApps = 1, //Список всех окон
     ListFavorites, //Список избранных окон
 
     // Основные кнопки
@@ -176,7 +176,7 @@ enum ControlID {
 };
 
 enum TrayMenuID {
-    Settings,
+    Settings = 1,
     Exit,
     Restart
 };
