@@ -37,12 +37,9 @@ static bool ReadRegistryValue(HKEY root, const wchar_t* subkey, const wchar_t* v
     return true;
 }
 void LoadNumberFromRegistry() {
-    bool a = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_FLAG, REG_BINARY, pv.isHideOn, true, true);
-    bool b = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_VAL, REG_DWORD, pv.timerToHide, CONST_AUTOHIDE_DELAY_MS, true);
-
-    if (a)
+    if (!ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_FLAG, REG_BINARY, pv.isHideOn, true, true))
         LogAdd(IT_NO_KEY1 + std::to_wstring(pv.isHideOn));
-    if (b)
+    if (!ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_TIMER_VAL, REG_DWORD, pv.timerToHide, CONST_AUTOHIDE_DELAY_MS, true))
         LogAdd(IT_NO_KEY2 + std::to_wstring(pv.timerToHide));
 }
 void SaveToRegistry(bool writeHideOn, bool writeTimer) {
@@ -55,7 +52,7 @@ void SaveToRegistry(bool writeHideOn, bool writeTimer) {
         LogAdd(IT_TIMER_VALUE_SET + std::to_wstring(pv.timerToHide));
     }
 }
-void SetZeroModKeysState(BYTE* keyState = nullptr) {
+void SetZeroModKeysState(BYTE* keyState) {
     BYTE localKeyState[256];
 
     if (!keyState) {

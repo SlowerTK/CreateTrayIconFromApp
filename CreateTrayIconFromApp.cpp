@@ -121,9 +121,13 @@ static void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dw
     auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
                            [&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
     if (it != favoriteWindows.end()) {
-        it->isFavorite = TRUE;
         if (it->hwnd == FindWindowW(it->className.c_str(), it->windowTitle.c_str())) {
+            it->isFavorite = true;
             CollapseToTray(it->hwnd, &*it);
+        }
+        else {
+            it->hwnd = nullptr;
+            it->isFavorite = ID_WND_SAVED_FAVORITES;
         }
     }
     KillTimer(hwnd, uintptr);
@@ -532,7 +536,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                         SetWindowTextW(pv.hRemoveButton, TX_BTN_REMOVE);
                     }
                     else {
-                        SetWindowTextW(pv.hRemoveButton, L"DEL");
+                        SetWindowTextW(pv.hRemoveButton, TX_BTN_DELETE);
                     }
                 }
             }
@@ -551,7 +555,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                 LRESULT sel = SendMessageW(pv.hApplicationsList, LB_GETCURSEL, NULL, NULL);
                 if (sel != LB_ERR) {
                     HiddenWindow* HW = reinterpret_cast<HiddenWindow*>(SendMessageW(pv.hApplicationsList, LB_GETITEMDATA, sel, NULL));
-                    HW->isFavorite = TRUE;
+                    HW->isFavorite = true;
                     int i = static_cast<int>(SendMessageW(pv.hFavoritesList, LB_ADDSTRING, NULL, reinterpret_cast<LPARAM>(HW->windowTitle.c_str())));
                     SendMessageW(pv.hFavoritesList, LB_SETITEMDATA, i, reinterpret_cast<LPARAM>(HW));
                     SendMessageW(pv.hApplicationsList, LB_DELETESTRING, sel, NULL);
@@ -605,7 +609,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                 break;
             case ID_EDIT_DELAY_FIELD:
             {
-                if (HIWORD(wParam) != EN_UPDATE)
+                if (code != EN_UPDATE)
                     break;
                 HWND hEdit = reinterpret_cast<HWND>(lParam);
                 wchar_t buffer[16] = { 0 };
@@ -712,9 +716,9 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
                 OpenSettings();
                 break;
             case ID_TRAY_RESTART:
-                ReleaseMutex(pv.hMutex);
-                CloseHandle(pv.hMutex);
-                UnregisterHotKey(hwnd, ID_HOTKEY_HIDE_ACTIVE);
+                //ReleaseMutex(pv.hMutex);
+                //CloseHandle(pv.hMutex);
+                //UnregisterHotKey(hwnd, ID_HOTKEY_HIDE_ACTIVE);
                 LogAdd(IT_RESTARTING);
                 RestartWithAdminRights();
                 PostMessageW(hwnd, WM_DESTROY, NULL, NULL);

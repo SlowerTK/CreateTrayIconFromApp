@@ -167,8 +167,10 @@ void SerchWindow(HiddenWindow& window) {
     }
 }
 void FindWindowFromFile(HiddenWindow& windowToFind, bool isFromFile) {
-    if (isFromFile) windowToFind.isFavorite = ID_WND_SAVED_FAVORITES;
-    SerchWindow(windowToFind);
+    if (isFromFile)
+        windowToFind.isFavorite = ID_WND_SAVED_FAVORITES;
+    if (windowToFind.isFavorite == ID_WND_SAVED_FAVORITES)
+        SerchWindow(windowToFind);
     if (windowToFind.hwnd && windowToFind.isFavorite == ID_WND_SAVED_FAVORITES) {
         windowToFind.isFavorite = true;
         CollapseToTray(windowToFind.hwnd, &windowToFind);

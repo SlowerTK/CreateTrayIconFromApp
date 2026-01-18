@@ -100,6 +100,7 @@ constexpr auto TX_TRAY_BTN_EXIT = L"Выход";
 constexpr auto TX_TRAY_BTN_HOTKEY = L"Ctrl + Alt + H";
 constexpr auto TX_BTN_ADD = L"▶";
 constexpr auto TX_BTN_REMOVE = L"◀";
+constexpr auto TX_BTN_DELETE = L"Del";
 constexpr auto TX_BTN_RELOAD = L"↻";
 constexpr auto TX_BTN_HOTKEY_SET = L"Изменить";
 constexpr auto TX_BTN_SAVE = L"Сохранить";
