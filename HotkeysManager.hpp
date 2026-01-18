@@ -3,7 +3,6 @@
 
 void LoadNumberFromRegistry();
 void SaveToRegistry(bool a, bool b);
-void SetZeroModKeysState();
 void SetZeroModKeysState(BYTE* keyState);
 void RegHotKey(UINT mod, UINT other, int id);
 std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey);

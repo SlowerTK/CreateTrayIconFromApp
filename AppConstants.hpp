@@ -162,6 +162,9 @@ constexpr auto ID_CLR_TRAYGRAY = RGB(44, 44, 44);
 constexpr auto ID_CLR_DISABLED_D = RGB(100, 100, 100);
 constexpr auto ID_CLR_DISABLED_L = RGB(200, 200, 200);
 
+constexpr byte DEFAULT_MODIFIER_KEYS = 3;
+constexpr byte DEFAULT_VIRTUAL_KEY = 72;
+
 // ============================================================================
 // МАКРОСЫ (DEFINES)
 // ============================================================================

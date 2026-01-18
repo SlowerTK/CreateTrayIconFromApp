@@ -55,22 +55,24 @@ void SaveToRegistry(bool writeHideOn, bool writeTimer) {
         LogAdd(IT_TIMER_VALUE_SET + std::to_wstring(pv.timerToHide));
     }
 }
-void SetZeroModKeysState() {
-    BYTE keyState[256];
-    if (GetKeyboardState(keyState)) {}
+void SetZeroModKeysState(BYTE* keyState = nullptr) {
+    BYTE localKeyState[256];
+
+    if (!keyState) {
+        if (!GetKeyboardState(localKeyState))
+            return;
+        keyState = localKeyState;
+    }
+
     keyState[VK_MENU] = 0;
     keyState[VK_CONTROL] = 0;
     keyState[VK_SHIFT] = 0;
-    keyState[92] = 0;
-    keyState[91] = 0;
-    SetKeyboardState(keyState);
-}
-void SetZeroModKeysState(BYTE* keyState) {
-    keyState[VK_MENU] = 0;
-    keyState[VK_CONTROL] = 0;
-    keyState[VK_SHIFT] = 0;
-    keyState[92] = 0;
-    keyState[91] = 0;
+    keyState[VK_RWIN] = 0;
+    keyState[VK_LWIN] = 0;
+
+    if (!keyState) {
+        SetKeyboardState(keyState);
+    }
 }
 void RegHotKey(UINT mod, UINT other, int id) {
     UnregisterHotKey(pv.trayWnd, id);
@@ -99,12 +101,12 @@ std::wstring convertKeysToWstring(UINT modKeys, UINT otherKey) {
         {VK_DELETE, L"Del"}, {VK_HOME, L"Home"},
         {VK_END, L"End"}, {VK_PRIOR, L"PgUp"},
         {VK_NEXT, L"PgDn"}, {VK_UP, L"Up"},
-        {VK_DOWN, L"Down"},	{VK_LEFT, L"Left"},
+        {VK_DOWN, L"Down"}, {VK_LEFT, L"Left"},
         {VK_RIGHT, L"Right"}, {VK_F1, L"F1"},
-        {VK_F2, L"F2"},	{VK_F3, L"F3"},
-        {VK_F4, L"F4"},	{VK_F5, L"F5"},
-        {VK_F6, L"F6"},	{VK_F7, L"F7"},
-        {VK_F8, L"F8"},	{VK_F9, L"F9"},
+        {VK_F2, L"F2"}, {VK_F3, L"F3"},
+        {VK_F4, L"F4"}, {VK_F5, L"F5"},
+        {VK_F6, L"F6"}, {VK_F7, L"F7"},
+        {VK_F8, L"F8"}, {VK_F9, L"F9"},
         {VK_F10, L"F10"}, {VK_F11, L"F11"},
         {VK_F12, L"F12"}, {VK_F13, L"F13"},
         {VK_F14, L"F14"}, {VK_F15, L"F15"},
@@ -148,15 +150,9 @@ void SaveHotKeys(byte mod, byte other) {
     LogAdd(std::wstring(IT_NEW_HOTKEY) + pv.hk.nameArr);
 }
 void ReadHotKeys() {
-    const byte defMod = MOD_CONTROL | MOD_ALT;
-    const byte defKey = 'H';
-
-    bool a = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_MODKEYS, REG_DWORD, pv.hk.modKey, defMod, true);
-    bool b = !ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_VKEYS, REG_DWORD, pv.hk.otherKey, defKey, true);
-
-    if (a)
+    if (!ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_MODKEYS, REG_DWORD, pv.hk.modKey, DEFAULT_MODIFIER_KEYS, true))
         LogAdd(IT_NO_KEY1 + std::to_wstring(pv.hk.modKey));
-    if (b)
+    if (!ReadRegistryValue(HKEY_CURRENT_USER, SY_REGISTRY_PATH, SY_REG_KEY_VKEYS, REG_DWORD, pv.hk.otherKey, DEFAULT_VIRTUAL_KEY, true))
         LogAdd(IT_NO_KEY2 + std::to_wstring(pv.hk.otherKey));
 
     pv.hk.nameArr = convertKeysToWstring(pv.hk.modKey, pv.hk.otherKey);
