@@ -28,10 +28,10 @@ void UpdateTrayMenu(bool isDebug) {
         ++it;
     }
     if (!hiddenWindows.empty()) AppendMenuW(pv.hMenu, MF_SEPARATOR, NULL, NULL);
-    if (pv.isAdminMode) AppendMenuW(pv.hMenu, MF_STRING | MF_DISABLED, ID_TRAY_RESTART, pv.hk.nameArr.c_str());
-    else AppendMenuW(pv.hMenu, MF_STRING, ID_TRAY_RESTART, TX_ADMIN_RESTART);
-    AppendMenuW(pv.hMenu, MF_STRING, ID_TRAY_SETTINGS, TX_TRAY_BTN_SETTINGS);
-    AppendMenuW(pv.hMenu, MF_STRING, ID_TRAY_EXIT, TX_TRAY_BTN_EXIT);
+    if (pv.isAdminMode) AppendMenuW(pv.hMenu, MF_STRING | MF_DISABLED, static_cast<UINT_PTR>(TrayMenuID::Restart), pv.hk.nameArr.c_str());
+    else AppendMenuW(pv.hMenu, MF_STRING, static_cast<UINT_PTR>(TrayMenuID::Restart), TX_ADMIN_RESTART);
+    AppendMenuW(pv.hMenu, MF_STRING, static_cast<UINT_PTR>(TrayMenuID::Settings), TX_TRAY_BTN_SETTINGS);
+    AppendMenuW(pv.hMenu, MF_STRING, static_cast<UINT_PTR>(TrayMenuID::Exit), TX_TRAY_BTN_EXIT);
 }
 static BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
     HWND hApplicationsList = reinterpret_cast<HWND>(lParam);
@@ -59,7 +59,7 @@ static BOOL CALLBACK EnumWindowsUpdateAppListProc(HWND hwnd, LPARAM lParam) {
         HW->className = className;
         HW->processID = processID;
         HW->processName = processName;
-        HW->isFavorite = false;
+        HW->isFavorite = FavoriteState::None;
         int index = static_cast<int>(SendMessageW(hApplicationsList, LB_ADDSTRING, NULL, reinterpret_cast<LPARAM>(windowTitle)));
         SendMessageW(hApplicationsList, LB_SETITEMDATA, index, reinterpret_cast<LPARAM>(HW));
     }

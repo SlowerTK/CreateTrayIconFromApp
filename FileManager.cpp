@@ -74,7 +74,8 @@ static HiddenWindow deserializeOne(const std::wstring& str) {
     s.processName = token;
     std::getline(iss, token, L'\n');
     s.commandLine = token;
-    FindWindowFromFile(s, true);
+    s.isFavorite = FavoriteState::SavedFavorite;
+    FindWindowFromFile(s);
     return s;
 }
 void deserializeFromWstring(const std::wstring& str) {

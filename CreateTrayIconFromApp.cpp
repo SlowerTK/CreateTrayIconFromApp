@@ -39,25 +39,25 @@ static LRESULT CALLBACK CheckBoxSubclassProc(HWND hwnd, UINT msg, WPARAM wParam,
 
             rc.left = rcCheck.right + 4;
 
-            COLORREF textColor;
+            UIColor textColor;
             if (isActive) {
                 if (pv.isDark)
-                    textColor = ID_CLR_LIGHT;
+                    textColor = UIColor::Light;
                 else
-                    textColor = ID_CLR_BLACK;
+                    textColor = UIColor::Black;
             }
             else {
                 if (pv.isDark)
-                    textColor = ID_CLR_DISABLED_D;
+                    textColor = UIColor::DisabledDark;
                 else
-                    textColor = ID_CLR_DISABLED_L;
+                    textColor = UIColor::DisabledLight;
             }
 
             HBRUSH bgBrush = pv.isDark ? pv.brDark : pv.brLight;
             FillRect(hdc, &rc, bgBrush);
 
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, textColor);
+            SetTextColor(hdc, static_cast<COLORREF>(textColor));
             DrawTextW(hdc, buf, -1, &rc, DT_SINGLELINE | DT_VCENTER);
 
             CloseThemeData(hTheme);
@@ -92,12 +92,12 @@ static LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, L
         GetWindowTextW(hwnd, buf, SIZEOF(buf));
 
         HGDIOBJ oldFont = SelectObject(hdc, pv.hFont);
-        COLORREF textColor = IsWindowEnabled(hwnd)
-            ? (pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK)
-            : (pv.isDark ? ID_CLR_DISABLED_D : ID_CLR_DISABLED_L);
+        UIColor textColor = IsWindowEnabled(hwnd)
+            ? (pv.isDark ? UIColor::Light : UIColor::Black)
+            : (pv.isDark ? UIColor::DisabledDark : UIColor::DisabledLight);
 
         SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, textColor);
+        SetTextColor(hdc, static_cast<COLORREF>(textColor));
 
         DrawTextW(hdc, buf, -1, &rc, DT_SINGLELINE);
 
@@ -119,15 +119,15 @@ static LRESULT CALLBACK StaticSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, L
 
 static void CALLBACK TIMER_PROC(HWND hwnd, UINT uint, UINT_PTR uintptr, DWORD dword) {
     auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
-                           [&](const HiddenWindow& wnd) { return wnd.isFavorite == ID_WND_TIMED_HIDE; });
+                           [&](const HiddenWindow& wnd) { return wnd.isFavorite == FavoriteState::SavedFavorite; });
     if (it != favoriteWindows.end()) {
         if (it->hwnd == FindWindowW(it->className.c_str(), it->windowTitle.c_str())) {
-            it->isFavorite = true;
+            it->isFavorite = FavoriteState::Active;
             CollapseToTray(it->hwnd, &*it);
         }
         else {
             it->hwnd = nullptr;
-            it->isFavorite = ID_WND_SAVED_FAVORITES;
+            it->isFavorite = FavoriteState::SavedFavorite;
         }
     }
     KillTimer(hwnd, uintptr);
@@ -230,11 +230,11 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         pv.hk.modKey = pv.hk.otherKey = pv.hk.isFixed = pv.hk.canSet = 0;
         pv.hHook = SetWindowsHookExW(WH_KEYBOARD_LL, KeyboardProc, GetModuleHandleW(NULL), 0);
         CreateWindowExW(NULL, TX_UI_CONTROL_STATIC, NULL, WS_VISIBLE | WS_CHILD | SS_BLACKFRAME, 0, 0, cx, cy, hwnd, NULL, pv.hInstance, NULL);
-        pv.hButton1 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_SAVE, WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy - 45), 106, 30, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_OK)), pv.hInstance, NULL);
+        pv.hButton1 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_SAVE, WS_VISIBLE | WS_DISABLED | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 3), (cy - 45), 106, 30, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnOk)), pv.hInstance, NULL);
         SendMessageW(pv.hButton1, WM_SETFONT, reinterpret_cast<WPARAM>(pv.hFont), TRUE);
-        pv.hButton2 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_RESET, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 2), (cy - 45), 106, 30, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_RESET)), pv.hInstance, NULL);
+        pv.hButton2 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_RESET, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx) * 2), (cy - 45), 106, 30, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnReset)), pv.hInstance, NULL);
         SendMessageW(pv.hButton2, WM_SETFONT, reinterpret_cast<WPARAM>(pv.hFont), TRUE);
-        pv.hButton3 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_CANCEL, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_CANCEL)), pv.hInstance, NULL);
+        pv.hButton3 = CreateWindowExW(0, TX_UI_CONTROL_BUTTON, TX_BTN_CANCEL, WS_VISIBLE | WS_CHILD | BS_CENTER | BS_VCENTER, (cx - (106 + dx)), (cy - 45), 106, 30, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnCancel)), pv.hInstance, NULL);
         SendMessageW(pv.hButton3, WM_SETFONT, reinterpret_cast<WPARAM>(pv.hFont), TRUE);
 
         ApplyThemeToControls(hwnd, pv.isDark);
@@ -264,7 +264,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
     {
         HDC hdc = reinterpret_cast<HDC>(wParam);
         SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK);
+        SetTextColor(hdc, static_cast<COLORREF>(pv.isDark ? UIColor::Light : UIColor::Black));
         return reinterpret_cast<INT_PTR>(pv.isDark ? pv.brDark : pv.brLightGray);
     }
     case WM_PAINT:
@@ -272,7 +272,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         EnableWindow(pv.hButton1, pv.hk.canSet);
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
-        HBRUSH hBrush = pv.isDark ? CreateSolidBrush(ID_CLR_DARK) : CreateSolidBrush(ID_CLR_LIGHTGRAY);
+        HBRUSH hBrush = pv.isDark ? CreateSolidBrush(static_cast<COLORREF>(UIColor::Dark)) : CreateSolidBrush(static_cast<COLORREF>(UIColor::LightGray));
         SelectObject(hdc, pv.hFont);
         {//нижняя полоса
             RECT rect = { 0, cy - 60, cx, cy };
@@ -283,7 +283,7 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             FillRect(hdc, &rect, hBrush);
             rect.left += 20;
             SetBkMode(hdc, TRANSPARENT);
-            SetTextColor(hdc, pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK);
+            SetTextColor(hdc, static_cast<COLORREF>(pv.isDark ? UIColor::Light : UIColor::Black));
             DrawTextW(hdc, TX_PRESS_HOTKEY, -1, &rect, DT_VCENTER | DT_SINGLELINE);
         }
         {//текст над нижней полосой
@@ -319,18 +319,18 @@ static LRESULT CALLBACK HKSettProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
     }
     case WM_COMMAND:
         switch (LOWORD(wParam)) {
-        case ID_BTN_OK:
+        case ControlID::BtnOk:
             RegHotKey(pv.hk.newModKey, pv.hk.newOtherKey, ID_HOTKEY_HIDE_ACTIVE);
             SetZeroModKeysState();
             DestroyWindow(hwnd);
             break;
-        case ID_BTN_RESET:
+        case ControlID::BtnReset:
             pv.hk.nameArr = TX_TRAY_BTN_HOTKEY;
             RegHotKey(DEFAULT_MODIFIER_KEYS, DEFAULT_VIRTUAL_KEY, ID_HOTKEY_HIDE_ACTIVE);
             SetZeroModKeysState();
             DestroyWindow(hwnd);
             break;
-        case ID_BTN_CANCEL:
+        case ControlID::BtnCancel:
             pv.hk.nameArr = oldNameArr;
             SetZeroModKeysState();
             DestroyWindow(hwnd);
@@ -388,19 +388,19 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
             HWND* hWnd;
         } controls[] = {
          { TX_UI_CONTROL_STATIC, TX_WINDOWS_LIST, NULL,  NULL,  &pv.hAppText },
-         { TX_UI_CONTROL_LIST, NULL, WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_LIST_APPS)), &pv.hApplicationsList },
+         { TX_UI_CONTROL_LIST, NULL, WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::ListApps)), &pv.hApplicationsList },
          { TX_UI_CONTROL_STATIC, TX_WINDOWS_SELECTED, NULL,  NULL,  &pv.hFavText },
-         { TX_UI_CONTROL_LIST, NULL, WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_LIST_FAVORITES)), &pv.hFavoritesList },
-         { TX_UI_CONTROL_BUTTON, TX_BTN_ADD, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_ADD)), &pv.hAddButton },
-         { TX_UI_CONTROL_BUTTON, TX_BTN_REMOVE, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_REMOVE)), &pv.hRemoveButton },
-         { TX_UI_CONTROL_BUTTON, TX_BTN_RELOAD, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_RELOAD)), &pv.hReloadButton },
-         { TX_UI_CONTROL_BUTTON, TX_AUTORUN, BS_AUTOCHECKBOX | WS_DISABLED, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_AUTOSTART)), &pv.hCheckBoxStartUp },
-         { TX_UI_CONTROL_BUTTON, TX_ICON_HINT, NULL, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_HINT)), &pv.hCheckBoxHint },
-         { TX_UI_CONTROL_BUTTON, TX_CHECKBOX_RESTORE, BS_AUTOCHECKBOX, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_TIME_AUTOHIDE)), &pv.hCheckBoxButton },
+         { TX_UI_CONTROL_LIST, NULL, WS_BORDER | LBS_SORT | LBS_NOTIFY | WS_VSCROLL | WS_HSCROLL, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::ListFavorites)), &pv.hFavoritesList },
+         { TX_UI_CONTROL_BUTTON, TX_BTN_ADD, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnAdd)), &pv.hAddButton },
+         { TX_UI_CONTROL_BUTTON, TX_BTN_REMOVE, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnRemove)), &pv.hRemoveButton },
+         { TX_UI_CONTROL_BUTTON, TX_BTN_RELOAD, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnReload)), &pv.hReloadButton },
+         { TX_UI_CONTROL_BUTTON, TX_AUTORUN, BS_AUTOCHECKBOX | WS_DISABLED, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnAutostart)), &pv.hCheckBoxStartUp },
+         { TX_UI_CONTROL_BUTTON, TX_ICON_HINT, NULL, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnHint)), &pv.hCheckBoxHint },
+         { TX_UI_CONTROL_BUTTON, TX_CHECKBOX_RESTORE, BS_AUTOCHECKBOX, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnTimeAutohide)), &pv.hCheckBoxButton },
          { TX_UI_CONTROL_STATIC, TX_EDITBOX_DELAY, NULL, NULL, &pv.hEditBoxText },
          { TX_UI_CONTROL_STATIC, TX_HOTKEY_TEXT, NULL, NULL, &pv.hHotKeysText },
          { TX_UI_CONTROL_STATIC, pv.hk.nameArr.c_str(),WS_BORDER | SS_CENTER | SS_CENTERIMAGE, NULL, &pv.hHotKeys},
-         { TX_UI_CONTROL_BUTTON, TX_BTN_HOTKEY_SET, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_BTN_HOTKEY_CHANGE)), &pv.hHotKeysButton }
+         { TX_UI_CONTROL_BUTTON, TX_BTN_HOTKEY_SET, BS_CENTER | BS_VCENTER, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::BtnHotkeyChange)), &pv.hHotKeysButton }
         };
 
         for (auto& ctrl : controls) {
@@ -421,7 +421,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
         SetWindowSubclass(pv.hEditBoxText, StaticSubclassProc, 1, 0);
 
         std::wstring timerStr = std::to_wstring(pv.timerToHide);
-        pv.hEditBox = CreateWindowExW(0, TX_UI_CONTROL_EDIT, timerStr.c_str(), WS_VISIBLE | WS_BORDER | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_EDIT_DELAY_FIELD)), pv.hInstance, NULL);
+        pv.hEditBox = CreateWindowExW(0, TX_UI_CONTROL_EDIT, timerStr.c_str(), WS_VISIBLE | WS_BORDER | WS_CHILD | ES_NUMBER | ES_LEFT, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(ControlID::EditDelayField)), pv.hInstance, NULL);
         SendMessageW(pv.hEditBox, WM_SETFONT, reinterpret_cast<WPARAM>(pv.hFont), TRUE);
 
         if (pv.isHideOn) {
@@ -475,7 +475,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
     {
         HDC hdc = reinterpret_cast<HDC>(wParam);
         SetBkMode(hdc, TRANSPARENT);
-        SetTextColor(hdc, pv.isDark ? ID_CLR_LIGHT : ID_CLR_BLACK);
+        SetTextColor(hdc, static_cast<COLORREF>(pv.isDark ? UIColor::Light : UIColor::Black));
 
         return reinterpret_cast<INT_PTR>(pv.isDark ? pv.brDark : pv.brLight);
     }
@@ -517,10 +517,10 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
         int id = LOWORD(wParam);
         int code = HIWORD(wParam);
         if (code == LBN_SELCHANGE) {
-            if (id == ID_LIST_APPS) {
+            if (id == ControlID::ListApps) {
                 SendMessageW(pv.hFavoritesList, LB_SETCURSEL, static_cast<WPARAM>(-1), 0);
             }
-            else if (id == ID_LIST_FAVORITES) {
+            else if (id == ControlID::ListFavorites) {
                 SendMessageW(pv.hApplicationsList, LB_SETCURSEL, static_cast<WPARAM>(-1), 0);
 
                 LRESULT sel = SendMessageW(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
@@ -550,12 +550,12 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
         }
         else {
             switch (id) {
-            case ID_BTN_ADD:
+            case ControlID::BtnAdd:
             {
                 LRESULT sel = SendMessageW(pv.hApplicationsList, LB_GETCURSEL, NULL, NULL);
                 if (sel != LB_ERR) {
                     HiddenWindow* HW = reinterpret_cast<HiddenWindow*>(SendMessageW(pv.hApplicationsList, LB_GETITEMDATA, sel, NULL));
-                    HW->isFavorite = true;
+                    HW->isFavorite = FavoriteState::Active;
                     int i = static_cast<int>(SendMessageW(pv.hFavoritesList, LB_ADDSTRING, NULL, reinterpret_cast<LPARAM>(HW->windowTitle.c_str())));
                     SendMessageW(pv.hFavoritesList, LB_SETITEMDATA, i, reinterpret_cast<LPARAM>(HW));
                     SendMessageW(pv.hApplicationsList, LB_DELETESTRING, sel, NULL);
@@ -565,7 +565,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                 }
                 break;
             }
-            case ID_BTN_REMOVE:
+            case ControlID::BtnRemove:
             {
                 LRESULT sel = SendMessageW(pv.hFavoritesList, LB_GETCURSEL, NULL, NULL);
                 if (sel != LB_ERR) {
@@ -589,12 +589,12 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                 }
                 break;
             }
-            case ID_BTN_RELOAD:
+            case ControlID::BtnReload:
                 EnableWindow(pv.hAddButton, 0);
                 EnableWindow(pv.hRemoveButton, 0);
                 UpdateApplicationsList();
                 break;
-            case ID_BTN_TIME_AUTOHIDE:
+            case ControlID::BtnTimeAutohide:
                 if (SendMessageW(pv.hCheckBoxButton, BM_GETCHECK, 0, 0) == BST_CHECKED) {
                     EnableWindow(pv.hEditBoxText, TRUE);
                     EnableWindow(pv.hEditBox, TRUE);
@@ -604,10 +604,10 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                     EnableWindow(pv.hEditBox, FALSE);
                 }
                 break;
-            case ID_BTN_HINT:
+            case ControlID::BtnHint:
                 MBINFO(IX_WINDOW_HINT);
                 break;
-            case ID_EDIT_DELAY_FIELD:
+            case ControlID::EditDelayField:
             {
                 if (code != EN_UPDATE)
                     break;
@@ -626,7 +626,7 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
                 }
                 break;
             }
-            case ID_BTN_HOTKEY_CHANGE:
+            case ControlID::BtnHotkeyChange:
                 EnableWindow(hwnd, FALSE);
                 CreateHKSettWnd();
                 break;
@@ -642,14 +642,14 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
             for (const auto& vec : favoriteWindows)
                 favorite += serializeToWstring(vec);
             WriteMyFile(SY_SETTINGS_FILENAME, favorite);
-            pv.isHideOn = IsDlgButtonChecked(hwnd, ID_BTN_TIME_AUTOHIDE);
+            pv.isHideOn = IsDlgButtonChecked(hwnd, ControlID::BtnTimeAutohide);
             bool first = (prevValue[0] != static_cast<unsigned int>(pv.isHideOn)),
                 second = (prevValue[1] != pv.timerToHide);
             if (first || second)
                 SaveToRegistry(first, second);
 
             if (pv.isAdminMode)
-                if (IsDlgButtonChecked(hwnd, ID_BTN_AUTOSTART)) {
+                if (IsDlgButtonChecked(hwnd, ControlID::BtnAutostart)) {
                     StartupChanging(true);
                     LogAdd(IT_AUTORUN_ADDED);
                     SendMessageW(pv.hCheckBoxStartUp, BM_SETCHECK, BST_CHECKED, 0);
@@ -678,16 +678,16 @@ static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM
 static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
-        pv.brDark = CreateSolidBrush(ID_CLR_DARK);
-        pv.brDarkGray = CreateSolidBrush(ID_CLR_DARKGRAY);
-        pv.brLight = CreateSolidBrush(ID_CLR_LIGHT);
-        pv.brLightGray = CreateSolidBrush(ID_CLR_LIGHTGRAY);
+        pv.brDark = CreateSolidBrush(static_cast<COLORREF>(UIColor::Dark));
+        pv.brDarkGray = CreateSolidBrush(static_cast<COLORREF>(UIColor::DarkGray));
+        pv.brLight = CreateSolidBrush(static_cast<COLORREF>(UIColor::Light));
+        pv.brLightGray = CreateSolidBrush(static_cast<COLORREF>(UIColor::LightGray));
         SetTimer(hwnd, ID_TIMER_AUTOHIDE, CONST_AUTOHIDE_DELAY_MS, NULL);
         break;
 
     case WM_TIMER:
         for (auto& fw : favoriteWindows) {
-            FindWindowFromFile(fw, false);
+            FindWindowFromFile(fw);
         }
         break;
     case WM_HOTKEY:
@@ -709,13 +709,13 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
             UpdateTrayMenu(isDebug);
             int cmd = TrackPopupMenu(pv.hMenu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_BOTTOMALIGN | TPM_CENTERALIGN, cursorPos.x, cursorPos.y, NULL, hwnd, NULL);
             switch (cmd) {
-            case ID_TRAY_EXIT:
+                case TrayMenuID::Exit:
                 CloseApp();
                 break;
-            case ID_TRAY_SETTINGS:
+            case TrayMenuID::Settings:
                 OpenSettings();
                 break;
-            case ID_TRAY_RESTART:
+            case TrayMenuID::Restart:
                 //ReleaseMutex(pv.hMutex);
                 //CloseHandle(pv.hMutex);
                 //UnregisterHotKey(hwnd, ID_HOTKEY_HIDE_ACTIVE);
@@ -731,7 +731,7 @@ static LRESULT CALLBACK TrayProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
                     auto it = std::find_if(favoriteWindows.begin(), favoriteWindows.end(),
                                            [&](const HiddenWindow& wnd) { return wnd.hwnd == hiddenWindows[index].hwnd; });
                     if (it != favoriteWindows.end() && pv.isHideOn && (GetKeyState(VK_SHIFT) & 0x8000) == 0) {
-                        it->isFavorite = ID_WND_TIMED_HIDE;
+                        it->isFavorite = FavoriteState::TimedHide;
                         SetTimer(NULL, reinterpret_cast<UINT_PTR>(it->hwnd), pv.timerToHide, TIMER_PROC);
                     }
                     hiddenWindows.erase(hiddenWindows.begin() + index);

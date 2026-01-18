@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <windows.h>
+#include "AppConstants.hpp"
 
 struct HotKeys {
     std::wstring nameArr;
@@ -30,7 +31,7 @@ struct HiddenWindow {
     HWND hwnd = 0;
     HICON hIcon = 0;
     DWORD processID = 0;
-    DWORD isFavorite = 0;
+    FavoriteState isFavorite = FavoriteState::None;
     std::wstring windowTitle;
     std::wstring className;
     std::wstring processName;

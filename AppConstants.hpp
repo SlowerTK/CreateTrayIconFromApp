@@ -129,40 +129,6 @@ constexpr auto CONST_WND_HEIGHT = 375;
 constexpr auto ID_HOTKEY_HIDE_ACTIVE = 1;
 constexpr auto ID_TIMER_AUTOHIDE = 1;
 
-constexpr auto ID_WND_SAVED_FAVORITES = 2;
-constexpr auto ID_WND_TIMED_HIDE = 3;
-
-constexpr auto ID_LIST_APPS = 11;
-constexpr auto ID_LIST_FAVORITES = 12;
-
-constexpr auto ID_BTN_ADD = 13;
-constexpr auto ID_BTN_REMOVE = 14;
-constexpr auto ID_BTN_RELOAD = 15;
-constexpr auto ID_BTN_AUTOSTART = 16;
-constexpr auto ID_BTN_TIME_AUTOHIDE = 17;
-constexpr auto ID_BTN_HINT = 18;
-constexpr auto ID_EDIT_DELAY_FIELD = 19;
-constexpr auto ID_BTN_HOTKEY_CHANGE = 20;
-
-constexpr auto ID_BTN_OK = 101;
-constexpr auto ID_BTN_RESET = 102;
-constexpr auto ID_BTN_CANCEL = 103;
-
-constexpr auto ID_TRAY_SETTINGS = 1;
-constexpr auto ID_TRAY_EXIT = 2;
-constexpr auto ID_TRAY_RESTART = 3;
-
-constexpr auto ID_CLR_BLACK = RGB(0, 0, 0);
-constexpr auto ID_CLR_LIGHT = RGB(255, 255, 255);
-constexpr auto ID_CLR_LIGHTGRAY = RGB(243, 243, 243);
-constexpr auto ID_CLR_DARK = RGB(30, 30, 30);
-constexpr auto ID_CLR_DARKGRAY = RGB(59, 59, 59);
-constexpr auto ID_CLR_GRAY = RGB(109, 109, 109);
-constexpr auto ID_CLR_TRAYLIGHT = RGB(249, 249, 249);
-constexpr auto ID_CLR_TRAYGRAY = RGB(44, 44, 44);
-constexpr auto ID_CLR_DISABLED_D = RGB(100, 100, 100);
-constexpr auto ID_CLR_DISABLED_L = RGB(200, 200, 200);
-
 constexpr byte DEFAULT_MODIFIER_KEYS = 3;
 constexpr byte DEFAULT_VIRTUAL_KEY = 72;
 
@@ -175,3 +141,55 @@ constexpr byte DEFAULT_VIRTUAL_KEY = 72;
 #define MBERROR(str) MessageBox(NULL, str, L"Ошибка!", MB_ICONERROR | MB_SETFOREGROUND)
 #define MBINFO(str) MessageBox(hwnd, str, L"Инфо", MB_OK | MB_SETFOREGROUND);
 #define TRAY_ICON_MESSAGE (WM_USER + 1)
+
+// ============================================================================
+// Перечисления (ENUMS)
+// ============================================================================
+
+enum class FavoriteState : DWORD {
+    None = 0, //Не в избранном
+    Active = 1, //В избранном и скрыто
+    SavedFavorite = 2, //В избраном и ожидает скрытия
+    TimedHide = 3 //В избраном, Востановлено и ожидает скрытие по таймеру
+};
+
+enum ControlID {
+    ListApps, //Список всех окон
+    ListFavorites, //Список избранных окон
+
+    // Основные кнопки
+    BtnAdd,
+    BtnRemove,
+    BtnReload,
+    BtnAutostart,
+    BtnTimeAutohide,
+    BtnHint,
+    BtnHotkeyChange,
+
+    // Поля ввода
+    EditDelayField,
+
+    // Кнопки диалога
+    BtnOk = 101,
+    BtnReset,
+    BtnCancel
+};
+
+enum TrayMenuID {
+    Settings,
+    Exit,
+    Restart
+};
+
+enum class UIColor : COLORREF {
+    Black = RGB(0, 0, 0),
+    Light = RGB(255, 255, 255),
+    LightGray = RGB(243, 243, 243),
+    Dark = RGB(30, 30, 30),
+    DarkGray = RGB(59, 59, 59),
+    Gray = RGB(109, 109, 109),
+    TrayLight = RGB(249, 249, 249),
+    TrayGray = RGB(44, 44, 44),
+    DisabledDark = RGB(100, 100, 100),
+    DisabledLight = RGB(200, 200, 200)
+};

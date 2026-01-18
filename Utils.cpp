@@ -44,7 +44,7 @@ HBITMAP IconToBitmap(HICON hIcon) {
     HDC hdcMem = CreateCompatibleDC(hdcScreen);
     HBITMAP hBitmap = CreateCompatibleBitmap(hdcScreen, width, height);
     HBITMAP hOldBitmap = static_cast<HBITMAP>(SelectObject(hdcMem, hBitmap));
-    HBRUSH hBrush = pv.isDark ? CreateSolidBrush(ID_CLR_TRAYGRAY) : CreateSolidBrush(ID_CLR_TRAYLIGHT);
+    HBRUSH hBrush = pv.isDark ? CreateSolidBrush(static_cast<COLORREF>(UIColor::TrayGray)) : CreateSolidBrush(static_cast<COLORREF>(UIColor::TrayLight));
     RECT rect = { 0, 0, width, height };
     FillRect(hdcMem, &rect, hBrush);
     DeleteObject(hBrush);

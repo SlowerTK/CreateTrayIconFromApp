@@ -108,7 +108,7 @@ void CollapseToTray(HWND hwnd, HiddenWindow* HW) {
         std::wstring className = GetWstringClassName(hwnd);
         if (className.empty())
             return;
-        hiddenWindows.push_back({ hwnd, GetIcon(hwnd), processID, false, GetWindowTitle(hwnd), className, processName, GetProcessCommandLine(processID) });
+        hiddenWindows.push_back({ hwnd, GetIcon(hwnd), processID, FavoriteState::None, GetWindowTitle(hwnd), className, processName, GetProcessCommandLine(processID) });
     }
     else {
         HW->hIcon = GetIcon(hwnd);
@@ -124,7 +124,7 @@ void CollapseToTrayFromFavorite() {
     for (int i = 0; i < count; ++i) {
         HiddenWindow* HW = reinterpret_cast<HiddenWindow*>(SendMessageW(pv.hFavoritesList, LB_GETITEMDATA, i, 0));
 
-        if (HW->isFavorite == TRUE && std::none_of(hiddenWindows.begin(), hiddenWindows.end(), [HW](const HiddenWindow& hw) { return hw.hwnd == HW->hwnd; })) {
+        if (HW->isFavorite == FavoriteState::Active && std::none_of(hiddenWindows.begin(), hiddenWindows.end(), [HW](const HiddenWindow& hw) { return hw.hwnd == HW->hwnd; })) {
             std::wstring commandLine = GetProcessCommandLine(HW->processID);
             if (!commandLine.empty()) {
                 HW->commandLine = std::move(commandLine);
@@ -166,13 +166,12 @@ void SerchWindow(HiddenWindow& window) {
         }
     }
 }
-void FindWindowFromFile(HiddenWindow& windowToFind, bool isFromFile) {
-    if (isFromFile)
-        windowToFind.isFavorite = ID_WND_SAVED_FAVORITES;
-    if (windowToFind.isFavorite == ID_WND_SAVED_FAVORITES)
+void FindWindowFromFile(HiddenWindow& windowToFind) {
+    if (windowToFind.isFavorite == FavoriteState::SavedFavorite) {
         SerchWindow(windowToFind);
-    if (windowToFind.hwnd && windowToFind.isFavorite == ID_WND_SAVED_FAVORITES) {
-        windowToFind.isFavorite = true;
-        CollapseToTray(windowToFind.hwnd, &windowToFind);
+        if (windowToFind.hwnd) {
+            windowToFind.isFavorite = FavoriteState::Active;
+            CollapseToTray(windowToFind.hwnd, &windowToFind);
+        }
     }
 }
